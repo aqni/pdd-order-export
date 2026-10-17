@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => ({
         name: '拼多多订单导出工具',
         namespace: 'http://tampermonkey.net/',
         author: 'aqnin@outlook.com',
+        icon: 'https://www.google.com/s2/favicons?sz=64&domain=pinduoduo.com',
         homepageURL: 'https://github.com/aqni/pdd-order-export',
         match: ['https://mobile.pinduoduo.com/orders.html*'],
         grant: 'none',
