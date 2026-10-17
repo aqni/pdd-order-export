@@ -1,0 +1,29 @@
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.fields label {
+  min-width: 0;
+}
+.fields input {
+  display: block;
+  min-width: 0;
+}
+.fields input[type='number'] {
+  width: 8ch;
+}
+.formats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 12px;
+}
+.formats label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.formats input {
+  margin: 0;
+}

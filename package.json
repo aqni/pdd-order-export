@@ -1,0 +1,36 @@
+{
+  "name": "pdd-order-export",
+  "private": true,
+  "description": "拼多多订单导出油猴脚本",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:browser": "npm run build && vitest run --project browser",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm test && npm run format:check",
+    "dev": "vite",
+    "proxy": "vite --config vite.proxy.config.ts",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@vitest/browser-playwright": "^5.0.5",
+    "git-describe": "^4.1.1",
+    "jsdom": "^26.1.0",
+    "playwright": "^1.64.1",
+    "prettier": "^3.6.0",
+    "typescript": "^5.9.0",
+    "vite": "^8.0.0",
+    "vite-plugin-monkey": "^8.1.1",
+    "vitest": "^5.0.5"
+  }
+}
