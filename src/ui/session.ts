@@ -1,128 +1,151 @@
-import { createOrderSource, readUserId } from '../api/client';
-import { collectOrders } from '../core/collect';
-import { errorMessage } from '../core/errors';
-import { validateOptions } from '../core/dates';
-import type { ExportOptions, FileFormat, OrderSource } from '../core/types';
-import { downloadFile } from '../export/download';
-import { exportFile } from '../export/serialize';
-import type { TaskState } from './model';
+import { PddError } from "../pdd";
+import {
+  InputError,
+  type ExportOptions,
+  type ReadonlyExportResult,
+  type StopReason,
+} from "../collect";
+import {
+  CollectionSession,
+  type CollectionDependencies,
+  type CollectionState,
+} from "../session";
+import { downloadFile, exportFile, type FileFormat } from "../export";
+import type { TaskState } from "./model";
 
-export interface SessionDependencies {
-  source: () => OrderSource;
-  collect: typeof collectOrders;
+export interface SessionDependencies extends CollectionDependencies {
   download: typeof downloadFile;
 }
 
-/** One isolated application session coordinates task state, rendering and downloads. */
-export function createExportSession(
+/** Adapts collection facts and user export actions to panel feedback. */
+export function createPanelSession(
   render: (state: TaskState) => void,
   overrides: Partial<SessionDependencies> = {},
 ) {
-  const dependencies = {
-    source: () => createOrderSource(readUserId()),
-    collect: collectOrders,
-    download: downloadFile,
-    ...overrides,
-  };
+  const download = overrides.download ?? downloadFile;
   let active = true;
-  let task: AbortController | null = null;
-  let state: TaskState = {
-    running: false,
-    status: '设置好范围后开始导出。',
-    error: '',
-    progress: null,
-    result: null,
-  };
-  const update = (change: Partial<TaskState>) => {
+  let feedback: Partial<Pick<TaskState, "status" | "error">> = {};
+  const collection = new CollectionSession((state) => {
+    feedback = {};
+    publish(state);
+  }, overrides);
+
+  function publish(state: CollectionState = collection.state) {
     if (!active) {
       return;
     }
-    state = { ...state, ...change };
-    render(state);
-  };
-  const run = async (options: ExportOptions, format: FileFormat) => {
-    if (!active || task) {
-      return;
-    }
-    update({ error: '' });
-    try {
-      validateOptions(options);
-      const source = dependencies.source();
-      const controller = new AbortController();
-      task = controller;
-      update({
-        running: true,
-        result: null,
-        progress: null,
-        status: '正在读取，请保持当前页面打开。',
-      });
-      const result = await dependencies.collect(
-        source,
-        options,
-        controller.signal,
-        (progress) => update({ progress }),
-      );
-      if (!active) {
-        return;
-      }
-      update({
-        result,
-        progress: result.progress,
-        status: `${result.complete ? '' : '结果不完整。'}${result.message}`,
-      });
-      if (result.complete && result.entries.length) {
-        try {
-          dependencies.download(exportFile(result, format));
-          update({
-            status: `已发起 ${format.toUpperCase()} 下载，请查看浏览器下载列表。`,
-          });
-        } catch {
-          update({ error: '自动下载未能发起，请使用下方按钮重试。' });
-        }
-      } else if (result.complete) {
-        update({ status: '这个日期范围内没有找到订单，可调整日期后重试。' });
-      }
-    } catch (error) {
-      update({ error: errorMessage(error), status: '未能完成读取。' });
-    } finally {
-      task = null;
-      update({ running: false });
-    }
-  };
-  render(state);
+    const running =
+      state.phase === "collecting" || state.phase === "cancelling";
+    const result = "result" in state ? state.result : null;
+    render({
+      running,
+      result,
+      progress:
+        state.phase === "collecting"
+          ? state.progress
+          : (result?.progress ?? null),
+      status: describeCollection(state),
+      error: state.phase === "failed" ? describeError(state.error) : "",
+      ...feedback,
+    });
+  }
+
+  publish();
   return {
-    submit(options: ExportOptions, format: FileFormat) {
-      void run(options, format);
+    collect(options: ExportOptions) {
+      return collection.collect(options);
     },
     cancel() {
-      if (!active || !task) {
+      collection.cancel();
+    },
+    export(format: FileFormat) {
+      const state = collection.state;
+      const result = "result" in state ? state.result : null;
+      if (!active || !result?.entries.length) {
         return;
       }
-      task.abort();
-      update({ status: '正在取消…', progress: null });
-    },
-    download(format: FileFormat) {
-      if (!active || task || !state.result) {
+      let file;
+      try {
+        file = exportFile(result, format);
+      } catch {
+        feedback = {
+          error:
+            format === "csv"
+              ? "CSV 生成失败，请尝试导出 JSON。"
+              : "JSON 生成失败，请稍后重试。",
+        };
+        publish();
         return;
       }
       try {
-        dependencies.download(exportFile(state.result, format));
-        let status = `已发起 ${format.toUpperCase()} 下载，请查看浏览器下载列表。`;
-        if (!state.result.complete) {
-          status = `结果不完整。${state.result.message} ${status}`;
-        }
-        update({
-          error: '',
-          status,
-        });
+        download(file);
+        const status = `已发起 ${format.toUpperCase()} 导出，请查看浏览器下载列表。`;
+        feedback = {
+          error: "",
+          status: result.complete
+            ? status
+            : `结果不完整。${describeResult(result)} ${status}`,
+        };
       } catch {
-        update({ error: '无法发起下载，请检查浏览器下载权限后重试。' });
+        feedback = { error: "无法发起下载，请检查浏览器下载权限后重试。" };
       }
+      publish();
     },
     dispose() {
       active = false;
-      task?.abort();
-      state = { ...state, result: null, progress: null };
+      collection.dispose();
     },
   };
+}
+
+function describeCollection(state: CollectionState): string {
+  const { phase } = state;
+  if (phase === "cancelling") {
+    return "正在取消…";
+  }
+  if (phase === "collecting") {
+    return "正在收集，请保持当前页面打开。";
+  }
+  if (phase === "failed") {
+    return "未能完成收集。";
+  }
+  if (phase !== "ready") {
+    return "设置好范围后开始收集。";
+  }
+  const { result } = state;
+  if (result.complete && !result.entries.length) {
+    return "这个日期范围内没有找到订单，可调整日期后重试。";
+  }
+  return (result.complete ? "" : "结果不完整。") + describeResult(result);
+}
+
+function describeError(error: unknown): string {
+  return error instanceof InputError
+    ? describeInputError(error)
+    : error instanceof PddError
+      ? error.message
+      : "操作失败，请稍后重试。";
+}
+
+function describeResult(result: ReadonlyExportResult): string {
+  const messages: Record<StopReason, string> = {
+    end: "已读到空页，列表遍历结束。",
+    range: "已读过起始日期，所选日期范围遍历结束。",
+    limit: "已达到页数上限，结果不完整。",
+    cancelled: "已取消，保留已获取的结果。",
+    failed: "请求失败，保留已获取的结果。",
+  };
+  return result.error ?? messages[result.reason];
+}
+
+function describeInputError(error: InputError): string {
+  const messages: Record<string, string> = {
+    startDate: "请输入有效的日期。",
+    endDate: "请输入有效的日期。",
+    pageSize: "每页数量必须是 1–50 的整数。",
+    maxPages: "页数上限必须是 1–500 的整数。",
+    includeDetails: "请选择是否读取详情。",
+    range: "开始日期不能晚于结束日期。",
+  };
+  return messages[error.field] ?? "导出设置不符合预期。";
 }

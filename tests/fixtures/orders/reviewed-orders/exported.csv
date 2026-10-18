@@ -1,0 +1,4 @@
+订单编号,店铺,商品,订单状态,订单金额（元）,支付方式,下单时间,物流公司,快递单号
+261017-synthetic-001,synthetic-text-00018,商品：synthetic-text-00010，规格：synthetic-text-00012，数量：7，单价：0.07元,synthetic-text-00023,1.99,synthetic-text-00171,synthetic-text-00176,synthetic-text-00174,synthetic-text-00006
+261017-synthetic-002,synthetic-text-00070,商品：synthetic-text-00066，规格：synthetic-text-00068，数量：7，单价：0.07元,synthetic-text-00023,3.01,synthetic-text-00171,synthetic-text-00248,synthetic-text-00247,synthetic-text-00062
+261017-synthetic-003,synthetic-text-00097,商品：synthetic-text-00090，规格：synthetic-text-00092，数量：7，单价：0.07元,synthetic-text-00023,4.01,synthetic-text-00171,synthetic-text-00287,synthetic-text-00286,synthetic-text-00086

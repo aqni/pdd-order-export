@@ -1,12 +1,12 @@
-import { formTag, type ExportFormElement } from './form';
-import { resultTag, type ExportResultElement } from './result';
-import type { TaskState } from './model';
-import baseStyle from './styles.css?style';
-import componentStyle from './panel.css?style';
+import { formTag, type ExportFormElement } from "./form";
+import { resultTag, type ExportResultElement } from "./result";
+import type { TaskState } from "./model";
+import baseStyle from "./styles.css?style";
+import componentStyle from "./panel.css?style";
 
 /** The shell owns dialog visibility and composes independent Web Components. */
 export function createPanelView(root: ShadowRoot) {
-  const template = document.createElement('template');
+  const template = document.createElement("template");
   template.innerHTML = `
     <div class="shell">
       <button
@@ -46,16 +46,16 @@ export function createPanelView(root: ShadowRoot) {
   );
   const form = root.querySelector<ExportFormElement>(formTag)!;
   const result = root.querySelector<ExportResultElement>(resultTag)!;
-  const dialog = root.querySelector('dialog')!;
-  const launcher = root.querySelector<HTMLButtonElement>('.launcher')!;
-  launcher.addEventListener('click', () => {
+  const dialog = root.querySelector("dialog")!;
+  const launcher = root.querySelector<HTMLButtonElement>(".launcher")!;
+  launcher.addEventListener("click", () => {
     if (!dialog.open) {
       dialog.showModal();
     }
   });
   root
-    .querySelector<HTMLButtonElement>('.close')!
-    .addEventListener('click', () => dialog.close());
+    .querySelector<HTMLButtonElement>(".close")!
+    .addEventListener("click", () => dialog.close());
   return {
     form,
     result,
@@ -65,7 +65,7 @@ export function createPanelView(root: ShadowRoot) {
       }
     },
     update(state: TaskState) {
-      launcher.textContent = state.running ? '账单导出中…' : '导出账单';
+      launcher.textContent = state.running ? "订单收集中…" : "导出账单";
       form.running = state.running;
       result.state = state;
     },

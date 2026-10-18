@@ -1,17 +1,16 @@
-import { presetDates } from '../core/dates';
-import type { ExportRequest } from './model';
-import baseStyle from './styles.css?style';
-import componentStyle from './form.css?style';
+import { presetDates, type ExportOptions } from "../collect";
+import baseStyle from "./styles.css?style";
+import componentStyle from "./form.css?style";
 
-export const formTag = 'pdd-export-form';
+export const formTag = "pdd-export-form";
 
-/** A native form owns all draft values and emits a validated export request. */
+/** A native form owns all draft values and emits collection options. */
 export class ExportFormElement extends HTMLElement {
   #running = false;
 
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
+    this.attachShadow({ mode: "open" });
   }
 
   set running(value: boolean) {
@@ -28,12 +27,12 @@ export class ExportFormElement extends HTMLElement {
       return;
     }
     const root = this.shadowRoot!;
-    const template = document.createElement('template');
+    const template = document.createElement("template");
     /** Markup is static project source. Dynamic values use DOM properties or textContent. */
     template.innerHTML = `
       <form>
         <fieldset>
-          <legend>导出设置</legend>
+          <legend>收集设置</legend>
           <div class="fields">
             <label>
               开始日期
@@ -45,17 +44,6 @@ export class ExportFormElement extends HTMLElement {
             </label>
           </div>
           <p class="note" id="date-help">含起止日，留空不限；日期按订单号估算。</p>
-          <div class="formats" role="group" aria-label="文件格式">
-            <span>格式</span>
-            <label>
-              <input type="radio" name="format" value="csv" checked />
-              CSV（表格）
-            </label>
-            <label>
-              <input type="radio" name="format" value="json" />
-              JSON（数据备份）
-            </label>
-          </div>
           <p>
             <label class="check">
               <input name="includeDetails" type="checkbox" checked />
@@ -96,12 +84,12 @@ export class ExportFormElement extends HTMLElement {
           </details>
         </fieldset>
         <div class="actions">
-          <button class="start" type="submit">开始导出</button>
+          <button class="start" type="submit">开始收集</button>
           <button class="cancel" data-action="cancel" type="button" hidden>
             停止并保留结果
           </button>
         </div>
-        <p class="note">读取完成后自动下载，未完成的结果需手动下载。</p>
+        <p class="note">收集完成后，选择导出 CSV 或 JSON。</p>
       </form>
     `;
     root.append(
@@ -109,44 +97,41 @@ export class ExportFormElement extends HTMLElement {
       componentStyle.cloneNode(true),
       template.content,
     );
-    const form = root.querySelector('form')!;
-    const cancel = root.querySelector<HTMLButtonElement>('.cancel')!;
-    const startDate = form.elements.namedItem('startDate') as HTMLInputElement;
-    const endDate = form.elements.namedItem('endDate') as HTMLInputElement;
-    const dates = presetDates('month');
+    const form = root.querySelector("form")!;
+    const cancel = root.querySelector<HTMLButtonElement>(".cancel")!;
+    const startDate = form.elements.namedItem("startDate") as HTMLInputElement;
+    const endDate = form.elements.namedItem("endDate") as HTMLInputElement;
+    const dates = presetDates("month");
     startDate.value = dates.startDate;
     endDate.value = dates.endDate;
     endDate.min = startDate.value;
-    startDate.addEventListener('input', () => {
+    startDate.addEventListener("input", () => {
       endDate.min = startDate.value;
     });
-    form.addEventListener('submit', (event) => {
+    form.addEventListener("submit", (event) => {
       event.preventDefault();
       if (this.running || !form.reportValidity()) {
         return;
       }
       const values = new FormData(form);
-      const detail: ExportRequest = {
-        options: {
-          startDate: String(values.get('startDate') ?? ''),
-          endDate: String(values.get('endDate') ?? ''),
-          pageSize: Number(values.get('pageSize')),
-          maxPages: Number(values.get('maxPages')),
-          includeDetails: values.has('includeDetails'),
-        },
-        format: values.get('format') === 'json' ? 'json' : 'csv',
+      const detail: ExportOptions = {
+        startDate: String(values.get("startDate") ?? ""),
+        endDate: String(values.get("endDate") ?? ""),
+        pageSize: Number(values.get("pageSize")),
+        maxPages: Number(values.get("maxPages")),
+        includeDetails: values.has("includeDetails"),
       };
       this.dispatchEvent(
-        new CustomEvent<ExportRequest>('export-request', {
+        new CustomEvent<ExportOptions>("collect-request", {
           detail,
           bubbles: true,
           composed: true,
         }),
       );
     });
-    cancel.addEventListener('click', () => {
+    cancel.addEventListener("click", () => {
       this.dispatchEvent(
-        new CustomEvent('export-cancel', { bubbles: true, composed: true }),
+        new CustomEvent("collect-cancel", { bubbles: true, composed: true }),
       );
     });
     this.#renderRunning();
@@ -154,18 +139,18 @@ export class ExportFormElement extends HTMLElement {
 
   #renderRunning() {
     const root = this.shadowRoot!;
-    const form = root.querySelector('form');
+    const form = root.querySelector("form");
     if (!form) {
       return;
     }
-    const fieldset = root.querySelector('fieldset')!;
-    const start = root.querySelector<HTMLButtonElement>('.start')!;
-    const cancel = root.querySelector<HTMLButtonElement>('.cancel')!;
+    const fieldset = root.querySelector("fieldset")!;
+    const start = root.querySelector<HTMLButtonElement>(".start")!;
+    const cancel = root.querySelector<HTMLButtonElement>(".cancel")!;
     fieldset.disabled = this.running;
     start.disabled = this.running;
-    start.textContent = this.running ? '正在读取…' : '开始导出';
+    start.textContent = this.running ? "正在收集…" : "开始收集";
     cancel.hidden = !this.running;
-    form.setAttribute('aria-busy', String(this.running));
+    form.setAttribute("aria-busy", String(this.running));
   }
 
   disconnectedCallback() {

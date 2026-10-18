@@ -1,10 +1,10 @@
-import { createExportSession, type SessionDependencies } from './session';
-import { createPanelView } from './view';
-import type { ExportRequest } from './model';
-import type { FileFormat } from '../core/types';
+import { createPanelSession, type SessionDependencies } from "./session";
+import { createPanelView } from "./view";
+import type { ExportOptions } from "../collect";
+import type { FileFormat } from "../export";
 
-const tag = 'pdd-order-export-panel';
-const id = 'pdd-order-export';
+const tag = "pdd-order-export-panel";
+const id = "pdd-order-export";
 
 /** Connecting creates a new session; removing the host cancels and discards it. */
 export class OrderExportPanel extends HTMLElement {
@@ -13,22 +13,20 @@ export class OrderExportPanel extends HTMLElement {
 
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
+    this.attachShadow({ mode: "open" });
   }
 
   connectedCallback() {
     if (this.isConnected && !this.#disconnect) {
       const root = this.shadowRoot!;
       const view = createPanelView(root);
-      const session = createExportSession(view.update, this.dependencies);
-      view.form.addEventListener('export-request', (event) => {
-        const { options, format } = (event as CustomEvent<ExportRequest>)
-          .detail;
-        session.submit(options, format);
+      const session = createPanelSession(view.update, this.dependencies);
+      view.form.addEventListener("collect-request", (event) => {
+        void session.collect((event as CustomEvent<ExportOptions>).detail);
       });
-      view.form.addEventListener('export-cancel', () => session.cancel());
-      view.result.addEventListener('export-download', (event) => {
-        session.download((event as CustomEvent<FileFormat>).detail);
+      view.form.addEventListener("collect-cancel", () => session.cancel());
+      view.result.addEventListener("export-request", (event) => {
+        session.export((event as CustomEvent<FileFormat>).detail);
       });
       this.#disconnect = () => {
         session.dispose();

@@ -2,16 +2,19 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
-  workflow_call:
+  release:
+    types: [published]
 permissions:
   contents: read
 concurrency:
-  group: check-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,16 +24,38 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps --only-shell chromium
       - run: npm run check
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: integration-test-failures
+          name: test-failures
           path: test-results/
           retention-days: 7
+      - name: Get userscript version
+        id: version
+        run: |
+          version=$(npm run --silent version)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: userscript
+          name: userscript-${{ steps.version.outputs.version }}
           path: dist/pdd-order-export.user.js
           if-no-files-found: error
+  release:
+    needs: build
+    if: >-
+      github.event_name == 'release' &&
+      github.ref_name == format('v{0}', needs.build.outputs.version)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: userscript-${{ needs.build.outputs.version }}
+          path: dist
+      - name: Upload userscript to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/pdd-order-export.user.js --clobber --repo "$GITHUB_REPOSITORY"

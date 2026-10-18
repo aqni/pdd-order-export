@@ -1,0 +1,5 @@
+{
+  "name": "TypeGuardError",
+  "path": "$input.order_goods[0].goods_number",
+  "value": -1
+}

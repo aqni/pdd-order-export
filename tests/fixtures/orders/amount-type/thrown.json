@@ -1,0 +1,5 @@
+{
+  "name": "TypeGuardError",
+  "path": "$input.order_amount",
+  "value": "not-cents"
+}
