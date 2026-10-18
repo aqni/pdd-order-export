@@ -24,6 +24,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/ttsc/plugins
+          key: ${{ runner.os }}-${{ runner.arch }}-ttsc-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-ttsc-
       - run: npm run check
       - uses: actions/upload-artifact@v4
         if: failure()
