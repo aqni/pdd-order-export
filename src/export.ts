@@ -1,6 +1,6 @@
 import type { ReadonlyExportResult } from "./collect";
-import { assert, type tags } from "typia";
-import Papa from "papaparse";
+import { createAssert, type tags } from "typia";
+import { unparse } from "papaparse";
 
 type NonNegativeInteger = number &
   tags.Minimum<0> &
@@ -28,6 +28,9 @@ interface Order {
 interface OrderDetail {
   orderDescList?: { key: string; value: string }[];
 }
+
+const assertOrder = createAssert<Order>();
+const assertOrderDetail = createAssert<OrderDetail | null>();
 
 const formats = {
   csv: {
@@ -79,7 +82,7 @@ export function downloadFile({
 }
 
 function toCsv(result: ReadonlyExportResult): string {
-  return Papa.unparse(toTable(result));
+  return unparse(toTable(result));
 }
 
 function toJson(result: ReadonlyExportResult): string {
@@ -89,8 +92,8 @@ function toJson(result: ReadonlyExportResult): string {
 /** Table records preserve column order without changing the original data. */
 function toTable(result: ReadonlyExportResult): Record<string, string>[] {
   return result.entries.map((entry) => {
-    const order = assert<Order>(entry.order);
-    const detail = assert<OrderDetail | null>(entry.detail);
+    const order = assertOrder(entry.order);
+    const detail = assertOrderDetail(entry.detail);
     const details = detailFields(detail?.orderDescList);
     return {
       订单编号: order.order_sn,

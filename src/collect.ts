@@ -1,4 +1,4 @@
-import { assert, validate, type tags } from "typia";
+import { is, validate, type tags } from "typia";
 import { PddError, type PddClient, type Order, type OrderDetail } from "./pdd";
 
 /** Collection contracts keep raw wire values separate from task state. */
@@ -76,10 +76,10 @@ function calendarDate(date: Date): string {
 export function estimatedOrderDate(id: string): string {
   const parts = /^(\d{2})(\d{2})(\d{2})-/.exec(id);
   const date = parts ? `20${parts[1]}-${parts[2]}-${parts[3]}` : "";
-  return assert<CalendarDate>(
-    date,
-    () => new CollectionError("无法识别订单日期，已停止收集。"),
-  );
+  if (!is<CalendarDate>(date)) {
+    throw new CollectionError("无法识别订单日期。");
+  }
+  return date;
 }
 
 export function presetDates(preset: DatePreset, today = new Date()) {

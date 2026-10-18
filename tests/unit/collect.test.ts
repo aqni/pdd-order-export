@@ -126,7 +126,7 @@ test("an unrecognizable date stops filtering and keeps preceding orders", async 
   expect(result).toMatchObject({
     reason: "failed",
     complete: false,
-    error: "无法识别订单日期，已停止收集。",
+    error: "无法识别订单日期。",
     progress: { pages: 1, scanned: 2, selected: 1 },
   });
   expect(result.entries).toEqual([{ order: kept, detail: null }]);

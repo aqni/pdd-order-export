@@ -6,7 +6,7 @@ import {
   type Identifier,
   type ObjectExpression,
 } from "acorn";
-import { assert, is, json, type tags } from "typia";
+import { createIs, is, json, type tags } from "typia";
 import wretch from "wretch";
 
 /** Only fields used by collection and protocol validation are named. */
@@ -18,6 +18,10 @@ export interface Order extends Record<string, unknown> {
 export interface OrderDetail extends Record<string, unknown> {
   orderSn: string;
 }
+
+const isOrderList = createIs<{
+  orders: Order[];
+}>();
 
 export class PddError extends Error {
   override readonly name = "PddError";
@@ -60,16 +64,15 @@ export class PddClient {
       )
       .options({ signal })
       .post(offset === null ? { size } : { size, offset })
-      .json((value) =>
-        assert<{ orders: Order[] }>(
-          value,
-          () =>
-            new PddError(
-              "订单列表格式不符合预期，可能缺少订单编号或分页字段。",
-              "schema",
-            ),
-        ),
-      );
+      .json((value) => {
+        if (!isOrderList(value)) {
+          throw new PddError(
+            "订单列表格式不符合预期，可能缺少订单编号或分页字段。",
+            "schema",
+          );
+        }
+        return value;
+      });
     return orders;
   }
 
@@ -177,19 +180,22 @@ type RawDataStatement = Pick<ExpressionStatement, "type"> & {
   };
 };
 
+const isRawDataStatement = createIs<RawDataStatement>();
+const parseRawData = json.createIsParse<{
+  data: OrderDetail;
+}>();
+
 function parseOrderDetail(html: string): OrderDetail {
   const document = new DOMParser().parseFromString(html, "text/html");
   for (const script of document.scripts) {
     try {
       const program = parse(script.text, { ecmaVersion: "latest" });
       for (const statement of program.body) {
-        if (!is<RawDataStatement>(statement)) {
+        if (!isRawDataStatement(statement)) {
           continue;
         }
         const { right } = statement.expression;
-        const payload = json.isParse<{
-          data: OrderDetail;
-        }>(script.text.slice(right.start, right.end));
+        const payload = parseRawData(script.text.slice(right.start, right.end));
         if (payload) {
           return payload.data;
         }
