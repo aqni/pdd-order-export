@@ -55,6 +55,26 @@ async function install(context: BrowserContext, extensionId: string) {
     });
   }, extensionId);
   await installer.goto("chrome-extension://" + extensionId + "/options.html");
+  // 首次启动可能早于权限开启；等扩展注册注入脚本，避免错过首个文档。
+  await expect
+    .poll(
+      () =>
+        installer.evaluate(async () => {
+          const browser = globalThis as unknown as {
+            chrome: {
+              userScripts: {
+                getScripts(): Promise<{ js?: { file?: string }[] }[]>;
+              };
+            };
+          };
+          const scripts = await browser.chrome.userScripts.getScripts();
+          return scripts.flatMap((script) =>
+            (script.js ?? []).map((source) => source.file),
+          );
+        }),
+      { message: "Tampermonkey injection scripts must be registered" },
+    )
+    .toEqual(expect.arrayContaining(["page.js", "content.js"]));
   await installer.getByText(/^(Utilities|实用工具)$/).click();
   const [confirmation] = await Promise.all([
     context.waitForEvent("page", {
