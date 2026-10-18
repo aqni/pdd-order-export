@@ -11,7 +11,7 @@ type NonNegativeInteger = number &
     validate: "Number.isSafeInteger($input)";
   }>;
 
-/** CSV fields and their observed types in the reviewed PDD sample. */
+/** CSV 实际使用的字段；金额单位为分，类型约束只影响 CSV 导出。 */
 interface Order {
   order_sn: string;
   mall?: { mall_name?: string };
@@ -29,6 +29,7 @@ interface OrderDetail {
   orderDescList?: { key: string; value: string }[];
 }
 
+// 模块级生成一次校验函数，保留字段路径等诊断供数据问题定位。
 const assertOrder = createAssert<Order>();
 const assertOrderDetail = createAssert<OrderDetail | null>();
 
@@ -48,6 +49,10 @@ const formats = {
 
 export type FileFormat = keyof typeof formats;
 
+/**
+ * 从收集结果生成文件，不修改原始数据。
+ * @throws CSV 字段不符合模型时抛出 Typia 详细错误；JSON 不做 CSV 校验。
+ */
 export function exportFile(
   result: ReadonlyExportResult,
   format: FileFormat,
@@ -77,6 +82,7 @@ export function downloadFile({
     link.click();
   } finally {
     link.remove();
+    // 给浏览器读取 Blob 的时间，避免点击后立即回收导致下载失败。
     setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
   }
 }
@@ -89,7 +95,7 @@ function toJson(result: ReadonlyExportResult): string {
   return JSON.stringify(result, null, 2);
 }
 
-/** Table records preserve column order without changing the original data. */
+/** 属性插入顺序决定 CSV 列顺序；所有格式化均作用于新建的表格记录。 */
 function toTable(result: ReadonlyExportResult): Record<string, string>[] {
   return result.entries.map((entry) => {
     const order = assertOrder(entry.order);
@@ -117,6 +123,7 @@ function amount(value: NonNegativeInteger | undefined): string {
 }
 
 function goods(value: Order["order_goods"]): string {
+  // 商品名和规格中的分隔符换成空格，避免与摘要的字段、商品边界混淆。
   const clean = (text = "") => text.replace(/[,;，；\s]+/g, " ").trim();
   return (value ?? [])
     .map((item) => {

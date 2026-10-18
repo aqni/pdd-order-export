@@ -43,7 +43,7 @@ const siteProxy = {
 } satisfies Record<string, ProxyOptions>;
 
 function localProxy(): Plugin {
-  // Vite's proxy errors include URLs that may contain account data.
+  // Vite 默认代理错误会包含 URL，查询参数可能暴露账号信息。
   const logger = createLogger();
   logger.error = () => console.error("代理请求失败，请检查网络或上游服务。");
   return {
@@ -55,6 +55,7 @@ function localProxy(): Plugin {
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
+        // 除回环监听外还限制 Host 和 Origin，避免其他站点借用登录态代理。
         const host = req.headers.host || "";
         if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host)) {
           res.writeHead(403).end("Local requests only");

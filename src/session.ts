@@ -28,7 +28,7 @@ export type CollectionState =
     }
   | { readonly phase: "disposed" };
 
-/** Owns one collection; presentation observes states without running inside the generator. */
+/** 管理单个收集任务的生命周期，通过状态通知与 UI 解耦。 */
 export class CollectionSession {
   readonly #dependencies: CollectionDependencies;
   readonly #notify: (state: CollectionState) => void;
@@ -57,6 +57,7 @@ export class CollectionSession {
     }
     let retained = "result" in this.#state ? this.#state.result : null;
     try {
+      // 选项和会话初始化成功后才放弃上次结果。
       const options = validateOptions(input);
       const source = this.#dependencies.source();
       const controller = new AbortController();
@@ -97,6 +98,7 @@ export class CollectionSession {
     }
   }
 
+  /** 请求取消；继续消费生成器，直至收到保留部分数据的最终结果。 */
   cancel(): void {
     if (!this.#controller || this.#state.phase === "cancelling") {
       return;
@@ -105,6 +107,7 @@ export class CollectionSession {
     this.#publish({ phase: "cancelling" });
   }
 
+  /** 终止会话并忽略后续通知，用于宿主元素被移除时释放任务。 */
   dispose(): void {
     this.#state = { phase: "disposed" };
     this.#controller?.abort();
@@ -118,7 +121,7 @@ export class CollectionSession {
     try {
       this.#notify(state);
     } catch {
-      // Observer failures must not interrupt iteration or discard collected data.
+      // 渲染或其他观察者的异常不应中断迭代、丢弃已经收集的数据。
     }
   }
 }

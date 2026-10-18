@@ -9,7 +9,7 @@ import {
 import { createIs, is, json, type tags } from "typia";
 import wretch from "wretch";
 
-/** Only fields used by collection and protocol validation are named. */
+/** 只声明收集所需的协议字段，其他原始字段随响应保留。 */
 export interface Order extends Record<string, unknown> {
   order_sn: string & tags.Pattern<"\\S">;
   offset: string;
@@ -39,7 +39,7 @@ interface PddClientOptions {
   cookies?: () => string;
 }
 
-/** PDD requests and response validation; callers own pagination. */
+/** 封装拼多多请求与协议校验；分页位置由调用方维护。 */
 export class PddClient {
   readonly #http;
   readonly #uid: UserId;
@@ -52,6 +52,10 @@ export class PddClient {
     this.#http = createPddRequest(fetch);
   }
 
+  /**
+   * 读取一页原始订单；空数组表示列表结束。
+   * @param offset - 上一页末笔订单的 offset，null 表示首页。
+   */
   async getOrders(
     offset: string | null,
     size: number,
@@ -76,6 +80,7 @@ export class PddClient {
     return orders;
   }
 
+  /** 读取详情并核对订单编号，防止返回登录页或其他订单的数据。 */
   async getOrderDetail(
     order_sn: string,
     signal: AbortSignal,
@@ -108,7 +113,7 @@ function parseUserId(cookies: string): UserId {
       return ids[0];
     }
   } catch {
-    /* A malformed identity is a session failure. */
+    // Cookie 解码失败与身份缺失统一作为会话错误处理。
   }
   throw new PddError(
     "无法从当前页面 Cookie 读取用户标识，请在当前页面重新登录后重试。",
@@ -120,6 +125,7 @@ function createPddRequest(fetch: typeof globalThis.fetch) {
   return wretch()
     .fetchPolyfill(async (url, options) => {
       const signal = options.signal ?? undefined;
+      // 初次等待与重试退避都使用同一取消信号。
       await scheduler.postTask(() => {}, { delay: 600, signal });
       for (let attempt = 0; ; attempt++) {
         signal?.throwIfAborted();
@@ -131,6 +137,7 @@ function createPddRequest(fetch: typeof globalThis.fetch) {
             throw error;
           }
         }
+        // 只重试网络异常和 5xx；登录失效、限流等响应交由调用方处理。
         if (
           response &&
           (response.ok || response.status < 500 || attempt === 2)
@@ -167,7 +174,7 @@ function createPddRequest(fetch: typeof globalThis.fetch) {
     });
 }
 
-// Reuse Acorn's node tags and source ranges without validating unrelated subtrees.
+// 只校验定位 window.rawData 所需的节点，避免展开 Acorn 的完整递归 AST。
 type RawDataStatement = Pick<ExpressionStatement, "type"> & {
   expression: Pick<AssignmentExpression, "type" | "operator"> & {
     operator: "=";
@@ -185,6 +192,7 @@ const parseRawData = json.createIsParse<{
   data: OrderDetail;
 }>();
 
+/** 从脚本源码截取 JSON 字面量，不执行页面脚本；解析后保留全部字段。 */
 function parseOrderDetail(html: string): OrderDetail {
   const document = new DOMParser().parseFromString(html, "text/html");
   for (const script of document.scripts) {
@@ -201,7 +209,7 @@ function parseOrderDetail(html: string): OrderDetail {
         }
       }
     } catch {
-      // Skip scripts that cannot be parsed as JavaScript or literal JSON.
+      // 页面还包含无关脚本；当前脚本无法解析时继续寻找数据赋值。
     }
   }
   throw new PddError(

@@ -5,7 +5,7 @@ import componentStyle from "./result.css?style";
 
 export const resultTag = "pdd-export-result";
 
-/** Read-only result presentation; download intent is emitted as a standard DOM event. */
+/** 展示任务结果，通过自定义事件发出导出请求，不执行文件转换。 */
 export class ExportResultElement extends HTMLElement {
   #state?: TaskState;
 
@@ -91,6 +91,7 @@ export class ExportResultElement extends HTMLElement {
 
     const activity = root.querySelector<HTMLProgressElement>(".activity")!;
     activity.hidden = !collecting;
+    // 接口不提供订单总量；仅当前页详情有可确定的完成比例。
     activity.removeAttribute("value");
     activity.setAttribute("aria-label", "读取进度：订单总量未知");
     status.textContent = state.status;

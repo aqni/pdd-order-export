@@ -4,7 +4,7 @@ import type { TaskState } from "./model";
 import baseStyle from "./styles.css?style";
 import componentStyle from "./panel.css?style";
 
-/** The shell owns dialog visibility and composes independent Web Components. */
+/** 组合表单与结果组件；对话框开关只改变可见性，不结束任务。 */
 export function createPanelView(root: ShadowRoot) {
   const template = document.createElement("template");
   template.innerHTML = `

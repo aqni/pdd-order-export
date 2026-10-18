@@ -1,7 +1,6 @@
 import { is, validate, type tags } from "typia";
 import { PddError, type PddClient, type Order, type OrderDetail } from "./pdd";
 
-/** Collection contracts keep raw wire values separate from task state. */
 export type DatePreset = "month" | "previous" | "all";
 export type StopReason = "end" | "range" | "limit" | "cancelled" | "failed";
 type CalendarDate = string & tags.Format<"date">;
@@ -20,6 +19,7 @@ export interface ExportOptions {
 
 export interface ExportEntry {
   order: Order;
+  /** 尚未获取详情；取消或失败的任务也可能留下此值。 */
   detail: OrderDetail | null;
 }
 
@@ -29,7 +29,7 @@ export interface Progress {
   selected: number;
 }
 
-/** Request-local progress is reported live and does not change the exported protocol. */
+/** 当前请求的进度；最终结果只保存累计计数。 */
 export interface LiveProgress extends Progress {
   current:
     | { kind: "list"; page: number }
@@ -42,6 +42,7 @@ export interface ExportResult {
   finishedAt: string;
   options: ExportOptions;
   reason: StopReason;
+  /** 仅表示本次遍历正常结束，不保证接口覆盖全部历史订单。 */
   complete: boolean;
   error: string | null;
   progress: Progress;
@@ -72,7 +73,10 @@ function calendarDate(date: Date): string {
   ].join("-");
 }
 
-/** Estimate the filtering date without modifying the original order. */
+/**
+ * 从订单号前六位估算订单日期，不等同于支付时间。
+ * @throws 无法识别日期或日期不存在时抛出错误。
+ */
 export function estimatedOrderDate(id: string): string {
   const parts = /^(\d{2})(\d{2})(\d{2})-/.exec(id);
   const date = parts ? `20${parts[1]}-${parts[2]}-${parts[3]}` : "";
@@ -106,11 +110,17 @@ export function validateOptions(input: unknown): ExportOptions {
   return { ...checked.data };
 }
 
-/** Collection yields progress snapshots followed by one final result, including partial data. */
+/** 收集过程中产生进度快照，结束时产生一次结果事件。 */
 export type CollectionEvent =
   | { readonly type: "progress"; readonly progress: DeepReadonly<LiveProgress> }
   | { readonly type: "result"; readonly result: ReadonlyExportResult };
 
+/**
+ * 按日期倒序逐页收集订单，日期范围含起止日。
+ *
+ * 调用方须持续迭代到结果事件，才能取得取消或请求失败前保留的数据。
+ * 收集期间的失败写入结果；无效选项在开始收集前抛出。
+ */
 export async function* collectOrders(
   source: Pick<PddClient, "getOrders" | "getOrderDetail">,
   input: ExportOptions,
@@ -152,13 +162,14 @@ export async function* collectOrders(
       }
       const pendingDetails: ExportEntry[] = [];
       let reachedStart = false;
-      // Save selected orders before the first cancellable detail request.
+      // 先保留本页选中的列表数据，避免详情请求失败时丢失同页其他订单。
       for (const order of orders) {
         const { order_sn } = order;
         progress.scanned++;
         if (options.startDate || options.endDate) {
           const date = estimatedOrderDate(order_sn);
           if (options.startDate && date < options.startDate) {
+            // 协议约定列表日期倒序，后续订单也会超出范围。
             reachedStart = true;
             break;
           }
@@ -199,6 +210,7 @@ export async function* collectOrders(
         result.reason = "range";
         break;
       }
+      // offset 是上游返回的不透明游标，不从订单号或页数推算。
       cursor = orders.at(-1)!.offset;
     }
   } catch (error) {

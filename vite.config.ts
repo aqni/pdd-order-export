@@ -16,7 +16,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
       strictPort: true,
       cors: false,
     },
-    // Keep dependency scanning from compiling application TypeScript a second time.
+    // 避免依赖扫描阶段再次触发应用 TypeScript 的 Typia 编译。
     optimizeDeps: {
       noDiscovery: true,
       include: ["papaparse", "acorn", "wretch", "typia"],
@@ -26,7 +26,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
       minify: false,
       rolldownOptions: { output: { comments: true } },
     },
-    // Keep monkey last if other Vite plugins are added.
+    // monkey 处理最终用户脚本包装，放在源码转换插件之后。
     plugins: [
       withFilter(ttsc(), { transform: { code: /\btypia\b/ } }),
       monkey({

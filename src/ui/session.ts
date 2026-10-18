@@ -17,7 +17,7 @@ export interface SessionDependencies extends CollectionDependencies {
   download: typeof downloadFile;
 }
 
-/** Adapts collection facts and user export actions to panel feedback. */
+/** 将收集状态与导出操作转换为面板文案；导出失败后仍保留收集结果。 */
 export function createPanelSession(
   render: (state: TaskState) => void,
   overrides: Partial<SessionDependencies> = {},
@@ -66,6 +66,7 @@ export function createPanelSession(
       }
       let file;
       try {
+        // 用户选择导出时才处理 CSV，转换失败不影响原始 JSON 备份。
         file = exportFile(result, format);
       } catch {
         feedback = {

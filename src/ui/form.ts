@@ -4,7 +4,7 @@ import componentStyle from "./form.css?style";
 
 export const formTag = "pdd-export-form";
 
-/** A native form owns all draft values and emits collection options. */
+/** 持有未提交的表单值，通过自定义事件发出收集或取消请求。 */
 export class ExportFormElement extends HTMLElement {
   #running = false;
 
@@ -28,7 +28,7 @@ export class ExportFormElement extends HTMLElement {
     }
     const root = this.shadowRoot!;
     const template = document.createElement("template");
-    /** Markup is static project source. Dynamic values use DOM properties or textContent. */
+    // 此处只插入静态模板；动态数据通过 DOM 属性或 textContent 写入。
     template.innerHTML = `
       <form>
         <fieldset>

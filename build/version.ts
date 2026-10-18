@@ -8,6 +8,7 @@ function isReleaseTag(tag: string | null | undefined): tag is string {
   const date = releasePattern.exec(tag ?? "")?.[1];
   if (!date) return false;
   const timestamp = Date.parse(date);
+  // Date.parse 会将部分越界日期顺延，回转比较才能拒绝这些输入。
   return (
     Number.isFinite(timestamp) &&
     new Date(timestamp).toISOString().slice(0, 10) === date
@@ -24,6 +25,7 @@ export function assertReleaseTag(
   }
 }
 
+/** 发布采用触发 Release 的 tag；其他构建推导提交距离、哈希及脏状态。 */
 export function getUserscriptVersion(
   directory: string,
   environment: NodeJS.ProcessEnv = process.env,
@@ -40,6 +42,7 @@ export function getUserscriptVersion(
 
   const dirtyDate = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   if (environment.GITHUB_EVENT_NAME === "release") {
+    // 同一提交可能有多个 tag，git describe 选择的未必是本次发布版本。
     const tag = environment.GITHUB_REF_NAME;
     assertReleaseTag(tag);
     const currentTag = execFileSync(

@@ -6,7 +6,7 @@ import type { FileFormat } from "../export";
 const tag = "pdd-order-export-panel";
 const id = "pdd-order-export";
 
-/** Connecting creates a new session; removing the host cancels and discards it. */
+/** 接入文档时创建会话，宿主被移除时取消任务并清理视图。 */
 export class OrderExportPanel extends HTMLElement {
   dependencies: Partial<SessionDependencies> = {};
   #disconnect?: () => void;
@@ -46,6 +46,7 @@ if (!customElements.get(tag)) {
   customElements.define(tag, OrderExportPanel);
 }
 
+/** 挂载唯一面板，返回仅移除本次挂载实例的清理函数。 */
 export function mountPanel(
   dependencies: Partial<SessionDependencies> = {},
 ): () => void {
