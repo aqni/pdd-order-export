@@ -1,4 +1,4 @@
-import { is, validate, type tags } from "typia";
+import { createIs, createValidate, type tags } from "typia";
 import { PddError, type PddClient, type Order, type OrderDetail } from "./pdd";
 
 export type DatePreset = "month" | "previous" | "all";
@@ -73,6 +73,8 @@ function calendarDate(date: Date): string {
   ].join("-");
 }
 
+const isCalendarDate = createIs<CalendarDate>();
+
 /**
  * 从订单号前六位估算订单日期，不等同于支付时间。
  * @throws 无法识别日期或日期不存在时抛出错误。
@@ -80,7 +82,7 @@ function calendarDate(date: Date): string {
 export function estimatedOrderDate(id: string): string {
   const parts = /^(\d{2})(\d{2})(\d{2})-/.exec(id);
   const date = parts ? `20${parts[1]}-${parts[2]}-${parts[3]}` : "";
-  if (!is<CalendarDate>(date)) {
+  if (!isCalendarDate(date)) {
     throw new CollectionError("无法识别订单日期。");
   }
   return date;
@@ -97,8 +99,10 @@ export function presetDates(preset: DatePreset, today = new Date()) {
   return { startDate: calendarDate(first), endDate: calendarDate(last) };
 }
 
+const validateExportOptions = createValidate<ExportOptions>();
+
 export function validateOptions(input: unknown): ExportOptions {
-  const checked = validate<ExportOptions>(input);
+  const checked = validateExportOptions(input);
   if (!checked.success) {
     const field = checked.errors[0]?.path.replace("$input.", "") ?? "";
     throw new InputError(field);

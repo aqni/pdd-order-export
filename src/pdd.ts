@@ -6,7 +6,7 @@ import {
   type Identifier,
   type ObjectExpression,
 } from "acorn";
-import { createIs, is, json, type tags } from "typia";
+import { createIs, json, type tags } from "typia";
 import wretch from "wretch";
 
 /** 只声明收集所需的协议字段，其他原始字段随响应保留。 */
@@ -18,10 +18,6 @@ export interface Order extends Record<string, unknown> {
 export interface OrderDetail extends Record<string, unknown> {
   orderSn: string;
 }
-
-const isOrderList = createIs<{
-  orders: Order[];
-}>();
 
 export class PddError extends Error {
   override readonly name = "PddError";
@@ -38,6 +34,10 @@ interface PddClientOptions {
   fetch?: typeof globalThis.fetch;
   cookies?: () => string;
 }
+
+const isOrderList = createIs<{
+  orders: Order[];
+}>();
 
 /** 封装拼多多请求与协议校验；分页位置由调用方维护。 */
 export class PddClient {
@@ -99,6 +99,8 @@ export class PddClient {
 
 type UserId = string & tags.Pattern<"^[1-9][0-9]*$">;
 
+const isSingleUserId = createIs<[UserId]>();
+
 function parseUserId(cookies: string): UserId {
   try {
     const ids = [
@@ -109,7 +111,7 @@ function parseUserId(cookies: string): UserId {
         ),
       ),
     ];
-    if (is<[UserId]>(ids)) {
+    if (isSingleUserId(ids)) {
       return ids[0];
     }
   } catch {

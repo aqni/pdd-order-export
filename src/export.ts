@@ -1,4 +1,5 @@
 import type { ReadonlyExportResult } from "./collect";
+import type { Order, OrderDetail } from "./pdd";
 import { createAssert, type tags } from "typia";
 import { unparse } from "papaparse";
 
@@ -11,9 +12,8 @@ type NonNegativeInteger = number &
     validate: "Number.isSafeInteger($input)";
   }>;
 
-/** CSV 实际使用的字段；金额单位为分，类型约束只影响 CSV 导出。 */
-interface Order {
-  order_sn: string;
+/** 在协议字段基础上补充 CSV 字段；金额单位为分，约束只影响 CSV 导出。 */
+interface ExportedOrder extends Order {
   mall?: { mall_name?: string };
   order_status_prompt?: string;
   order_amount?: NonNegativeInteger;
@@ -25,13 +25,9 @@ interface Order {
   }[];
 }
 
-interface OrderDetail {
+interface ExportedOrderDetail extends OrderDetail {
   orderDescList?: { key: string; value: string }[];
 }
-
-// 模块级生成一次校验函数，保留字段路径等诊断供数据问题定位。
-const assertOrder = createAssert<Order>();
-const assertOrderDetail = createAssert<OrderDetail | null>();
 
 const formats = {
   csv: {
@@ -95,11 +91,15 @@ function toJson(result: ReadonlyExportResult): string {
   return JSON.stringify(result, null, 2);
 }
 
+// 模块级生成一次校验函数，保留字段路径等诊断供数据问题定位。
+const assertExportedOrder = createAssert<ExportedOrder>();
+const assertExportedOrderDetail = createAssert<ExportedOrderDetail | null>();
+
 /** 属性插入顺序决定 CSV 列顺序；所有格式化均作用于新建的表格记录。 */
 function toTable(result: ReadonlyExportResult): Record<string, string>[] {
   return result.entries.map((entry) => {
-    const order = assertOrder(entry.order);
-    const detail = assertOrderDetail(entry.detail);
+    const order = assertExportedOrder(entry.order);
+    const detail = assertExportedOrderDetail(entry.detail);
     const details = detailFields(detail?.orderDescList);
     return {
       订单编号: order.order_sn,
@@ -122,7 +122,7 @@ function amount(value: NonNegativeInteger | undefined): string {
   return (value / 100).toFixed(2);
 }
 
-function goods(value: Order["order_goods"]): string {
+function goods(value: ExportedOrder["order_goods"]): string {
   // 商品名和规格中的分隔符换成空格，避免与摘要的字段、商品边界混淆。
   const clean = (text = "") => text.replace(/[,;，；\s]+/g, " ").trim();
   return (value ?? [])
@@ -145,7 +145,7 @@ function goods(value: Order["order_goods"]): string {
 }
 
 function detailFields(
-  value: OrderDetail["orderDescList"],
+  value: ExportedOrderDetail["orderDescList"],
 ): ReadonlyMap<string, string> {
   const fields = new Map<string, string>();
   for (const { key, value: content } of value ?? []) {
