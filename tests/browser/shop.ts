@@ -10,6 +10,7 @@ export function createShop() {
       { order_sn: "261017-b", offset: "cursor:b", order_amount: 0 },
     ],
     holdDetails: false,
+    pageSize: 20,
     requests: [] as { method: string; path: string; body: unknown }[],
     errors: [] as string[],
   };
@@ -43,7 +44,7 @@ export function createShop() {
         assert.equal(url.searchParams.get("pdduid"), uid);
         assert(request.headers()["cookie"]?.includes("pdd_user_id=" + uid));
         const body = request.postDataJSON();
-        assert.equal(body.size, 10);
+        assert.equal(body.size, fixture.pageSize);
         if (body.offset !== undefined) {
           assert.equal(body.offset, fixture.orders.at(-1)!.offset);
         }

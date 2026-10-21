@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-10-21T00:00:00.000Z",
+  "finishedAt": "2026-10-21T00:00:01.000Z",
+  "options": {
+    "startDate": "",
+    "endDate": "",
+    "pageSize": 20,
+    "maxPages": 100,
+    "includeDetails": false
+  },
+  "reason": "end",
+  "complete": true,
+  "error": null,
+  "progress": {
+    "pages": 2,
+    "scanned": 4,
+    "selected": 4
+  },
+  "entries": [
+    {
+      "order": {
+        "order_sn": "261021-cent",
+        "offset": "cents:one",
+        "order_amount": 1,
+        "order_goods": [{ "goods_price": 1 }]
+      },
+      "detail": null
+    },
+    {
+      "order": {
+        "order_sn": "261021-large-89",
+        "offset": "cents:89",
+        "order_amount": 9007199254740989,
+        "order_goods": [{ "goods_price": 9007199254740989 }]
+      },
+      "detail": null
+    },
+    {
+      "order": {
+        "order_sn": "261021-large-90",
+        "offset": "cents:90",
+        "order_amount": 9007199254740990,
+        "order_goods": [{ "goods_price": 9007199254740990 }]
+      },
+      "detail": null
+    },
+    {
+      "order": {
+        "order_sn": "261021-limit",
+        "offset": "cents:limit",
+        "order_amount": 9007199254740991,
+        "order_goods": [{ "goods_price": 9007199254740991 }]
+      },
+      "detail": null
+    }
+  ]
+}

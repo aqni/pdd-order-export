@@ -146,6 +146,8 @@ function createPddRequest(fetch: typeof globalThis.fetch) {
         ) {
           return response;
         }
+        // 重试前释放未消费的响应；清理失败不应阻止后续请求。
+        if (response?.body) await response.body.cancel().catch(() => {});
         await scheduler.postTask(() => {}, {
           delay: 500 * (attempt + 1),
           signal,

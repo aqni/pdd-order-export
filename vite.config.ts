@@ -1,4 +1,4 @@
-import { defineConfig, withFilter } from "vite";
+import { defineConfig } from "vite";
 import ttsc from "@ttsc/unplugin/vite";
 import monkey, { cdn } from "vite-plugin-monkey";
 import proxyConfig from "./build/proxy.ts";
@@ -19,21 +19,27 @@ export default defineConfig(({ mode, command, isPreview }) => {
     // 避免依赖扫描阶段再次触发应用 TypeScript 的 Typia 编译。
     optimizeDeps: {
       noDiscovery: true,
-      include: ["papaparse", "acorn", "wretch", "typia"],
+      include: ["papaparse", "acorn", "wretch", "typia", "vanjs-core"],
     },
     build: {
       target: "es2022",
       minify: false,
+      cssMinify: false,
       rolldownOptions: { output: { comments: true } },
     },
     // monkey 处理最终用户脚本包装，放在源码转换插件之后。
     plugins: [
-      withFilter(ttsc(), { transform: { code: /\btypia\b/ } }),
+      ttsc(),
       monkey({
         server: { open: mode === "test" ? false : undefined },
         entry: "src/main.ts",
         build: {
           externalGlobals: {
+            "vanjs-core": [
+              "van",
+              (version) =>
+                `https://cdn.jsdelivr.net/gh/vanjs-org/van@${version}/public/van-${version}.nomodule.min.js`,
+            ],
             papaparse: cdn.jsdelivr("Papa", "papaparse.min.js"),
             acorn: cdn.jsdelivr("acorn", "dist/acorn.js"),
             wretch: cdn.jsdelivr("wretch", "dist/bundle/wretch.min.js"),

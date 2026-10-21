@@ -110,6 +110,15 @@ async function openShop(testInfo: TestInfo) {
       await readFile(join(dirname(packagePath), file!), "utf8"),
     );
   }
+  {
+    const { version } = JSON.parse(
+      await readFile("node_modules/vanjs-core/package.json", "utf8"),
+    );
+    dependencies.set(
+      `https://cdn.jsdelivr.net/gh/vanjs-org/van@${version}/public/van-${version}.nomodule.min.js`,
+      await readFile(`node_modules/.cache/vanjs-core/${version}.js`, "utf8"),
+    );
+  }
   const extension = resolve("node_modules/.cache/tampermonkey", pin.version);
   assert.equal(
     JSON.parse(await readFile(join(extension, "manifest.json"), "utf8"))
@@ -171,8 +180,9 @@ async function openShop(testInfo: TestInfo) {
 
   try {
     context = await chromium.launchPersistentContext("", {
-      channel: "chromium",
+      channel: process.env.PLAYWRIGHT_CHANNEL ?? "chromium",
       headless: true,
+      hasTouch: true,
       viewport: { width: 1000, height: 800 },
       proxy: {
         server: "http://127.0.0.1:" + (proxy.address() as AddressInfo).port,
@@ -232,8 +242,6 @@ async function openShop(testInfo: TestInfo) {
     await page.goto(origin + "/orders.html");
     await page.getByRole("button", { name: "导出账单", exact: true }).click();
     assert.deepEqual([...loaded].sort(), [...dependencies.keys()].sort());
-    await page.getByLabel("开始日期").fill("");
-    await page.getByLabel("结束日期").fill("");
     return {
       fixture,
       page,

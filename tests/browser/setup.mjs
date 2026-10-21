@@ -7,21 +7,43 @@ import { unzipSync } from "fflate";
 
 export default async function setup() {
   const require = createRequire(import.meta.url);
+  const { version } = JSON.parse(
+    await readFile("node_modules/vanjs-core/package.json", "utf8"),
+  );
+  const vanCache = resolve("node_modules/.cache/vanjs-core");
+  await mkdir(vanCache, { recursive: true });
+  const vanPath = resolve(vanCache, `${version}.js`);
+  try {
+    await readFile(vanPath);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    const response = await fetch(
+      `https://cdn.jsdelivr.net/gh/vanjs-org/van@${version}/public/van-${version}.nomodule.min.js`,
+      { signal: AbortSignal.timeout(30000) },
+    );
+    if (!response.ok)
+      throw new Error(`VanJS download failed: ${response.status}`);
+    await writeFile(vanPath, await response.text());
+  }
   const cli = resolve(
     dirname(require.resolve("playwright/package.json")),
     "cli.js",
   );
-  execFileSync(
-    process.execPath,
-    [
-      cli,
-      "install",
-      "--no-shell",
-      ...(process.env.CI ? ["--with-deps"] : []),
-      "chromium",
-    ],
-    { stdio: "inherit" },
-  );
+  if (
+    !process.env.PLAYWRIGHT_CHANNEL ||
+    process.env.PLAYWRIGHT_CHANNEL === "chromium"
+  )
+    execFileSync(
+      process.execPath,
+      [
+        cli,
+        "install",
+        "--no-shell",
+        ...(process.env.CI ? ["--with-deps"] : []),
+        "chromium",
+      ],
+      { stdio: "inherit" },
+    );
   const pin = JSON.parse(
     await readFile(new URL("./tampermonkey.json", import.meta.url), "utf8"),
   );

@@ -26,6 +26,10 @@ test("the real development server serves an installable script and compiled vali
     const module = await (await fetch(base + "/src/pdd.ts")).text();
     expect(module).toContain("getOrderDetail");
     expect(module).not.toMatch(/\bassert<|\bassert\s*\(/);
+    for (const component of ["view", "main"]) {
+      const response = await fetch(base + `/src/${component}.ts`);
+      expect(response.ok).toBe(true);
+    }
   } finally {
     await server.close();
   }

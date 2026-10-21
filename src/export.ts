@@ -103,10 +103,10 @@ function toTable(result: ReadonlyExportResult): Record<string, string>[] {
     const details = detailFields(detail?.orderDescList);
     return {
       订单编号: order.order_sn,
+      订单金额: amount(order.order_amount),
       店铺: order.mall?.mall_name ?? "",
       商品: goods(order.order_goods),
       订单状态: order.order_status_prompt ?? "",
-      "订单金额（元）": amount(order.order_amount),
       支付方式: details.get("支付方式") ?? "",
       下单时间: details.get("下单时间") ?? "",
       物流公司: details.get("物流公司") ?? "",
@@ -119,7 +119,9 @@ function amount(value: NonNegativeInteger | undefined): string {
   if (value === undefined) {
     return "";
   }
-  return (value / 100).toFixed(2);
+  // 安全整数转十进制字符串，再拆分元、分，避免浮点除法丢失一分钱。
+  const cents = String(value).padStart(3, "0");
+  return `${cents.slice(0, -2)}.${cents.slice(-2)}`;
 }
 
 function goods(value: ExportedOrder["order_goods"]): string {

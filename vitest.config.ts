@@ -1,9 +1,8 @@
 import { defineConfig } from "vitest/config";
-import { withFilter } from "vite";
 import ttsc from "@ttsc/unplugin/vite";
 
 export default defineConfig({
-  plugins: [withFilter(ttsc(), { transform: { code: /\btypia\b/ } })],
+  plugins: [ttsc()],
   test: {
     clearMocks: true,
     restoreMocks: true,
@@ -25,6 +24,8 @@ export default defineConfig({
         test: {
           name: "integration",
           environment: "node",
+          // 多个 Vite 服务共享依赖预构建缓存，串行启动以避免冷缓存竞争。
+          fileParallelism: false,
           include: ["tests/integration/*.test.ts"],
         },
       },

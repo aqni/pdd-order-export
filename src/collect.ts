@@ -1,7 +1,6 @@
 import { createIs, createValidate, type tags } from "typia";
 import { PddError, type PddClient, type Order, type OrderDetail } from "./pdd";
 
-export type DatePreset = "month" | "previous" | "all";
 export type StopReason = "end" | "range" | "limit" | "cancelled" | "failed";
 type CalendarDate = string & tags.Format<"date">;
 type PositiveInteger<Max extends number> = number &
@@ -65,14 +64,6 @@ export class InputError extends Error {
 
 class CollectionError extends Error {}
 
-function calendarDate(date: Date): string {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
 const isCalendarDate = createIs<CalendarDate>();
 
 /**
@@ -86,17 +77,6 @@ export function estimatedOrderDate(id: string): string {
     throw new CollectionError("无法识别订单日期。");
   }
   return date;
-}
-
-export function presetDates(preset: DatePreset, today = new Date()) {
-  if (preset === "all") {
-    return { startDate: "", endDate: "" };
-  }
-  const month = preset === "previous" ? today.getMonth() - 1 : today.getMonth();
-  const first = new Date(today.getFullYear(), month, 1);
-  const last =
-    preset === "month" ? today : new Date(today.getFullYear(), month + 1, 0);
-  return { startDate: calendarDate(first), endDate: calendarDate(last) };
 }
 
 const validateExportOptions = createValidate<ExportOptions>();

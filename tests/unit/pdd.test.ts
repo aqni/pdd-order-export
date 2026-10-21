@@ -39,16 +39,19 @@ const client = (fetch: typeof globalThis.fetch) =>
   new PddClient({ fetch, cookies: () => "pdd_user_id=123" });
 
 test("retries only transport/server failures, preserving the original request across attempts", async () => {
+  const discarded = new Response("temporary failure", { status: 503 });
+  const cancelBody = vi.spyOn(discarded.body!, "cancel");
   const fetcher = vi
     .fn<typeof fetch>()
     .mockRejectedValueOnce(new TypeError("offline"))
-    .mockResolvedValueOnce(new Response(null, { status: 503 }))
+    .mockResolvedValueOnce(discarded)
     .mockResolvedValueOnce(Response.json({ orders: [] }));
   const signal = new AbortController().signal;
   const pending = client(fetcher).getOrders("opaque", 10, signal);
   await vi.runAllTimersAsync();
   expect(await pending).toEqual([]);
   expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(cancelBody).toHaveBeenCalledOnce();
   for (const [, request] of fetcher.mock.calls) {
     expect(request).toMatchObject({
       signal,
@@ -58,6 +61,29 @@ test("retries only transport/server failures, preserving the original request ac
       body: '{"size":10,"offset":"opaque"}',
     });
   }
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test("response cleanup failure does not prevent retries or replace the final HTTP error", async () => {
+  const discarded = new Response("temporary failure", { status: 503 });
+  vi.spyOn(discarded.body!, "cancel").mockRejectedValue(new Error("cleanup"));
+  const final = new Response("private upstream details", { status: 503 });
+  const cancelFinal = vi.spyOn(final.body!, "cancel");
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(discarded)
+    .mockResolvedValueOnce(new Response(null, { status: 503 }))
+    .mockResolvedValueOnce(final);
+  const pending = expect(
+    client(fetcher).getOrders(null, 10, new AbortController().signal),
+  ).rejects.toMatchObject({
+    code: "request",
+    message: "请求失败（HTTP 503），请稍后再试。",
+  });
+  await vi.runAllTimersAsync();
+  await pending;
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(cancelFinal).not.toHaveBeenCalled();
   expect(vi.getTimerCount()).toBe(0);
 });
 
