@@ -91,12 +91,13 @@ function ui(view: ViewHandle) {
   };
 }
 
-function mockPage(
-  entries: readonly CollectedOrder[],
-): AsyncGenerator<CollectedOrder, void, void> {
-  return (async function* () {
-    yield* entries;
-  })();
+function mockPage(entries: readonly CollectedOrder[]) {
+  return {
+    total: entries.length,
+    orders: (async function* () {
+      yield* entries;
+    })(),
+  };
 }
 function mockResult() {
   const result: readonly CollectedOrder[] = sample.entries;
@@ -238,6 +239,7 @@ test("busy updates keep native draft nodes and submit their current values", asy
   expect(input("pageSize").matches(":disabled")).toBe(true);
   expect(action.type).toBe("button");
   expect(action.textContent).toBe("停止并保留结果");
+  expect(root.querySelector("progress")!.hasAttribute("value")).toBe(false);
   expect(root.querySelector("hr")!.hidden).toBe(false);
   expect(collection.collectOrders).toHaveBeenCalledWith(
     expect.any(PddClient),
@@ -330,13 +332,17 @@ test("native drafts and progress nodes survive updates and moving the view", asy
   await vi.waitFor(() =>
     expect(root.querySelector(".counts")!.textContent).toContain("详情 1 笔"),
   );
-  expect(progress.hasAttribute("value")).toBe(false);
+  expect(progress.value).toBe(1);
+  expect(progress.max).toBe(2);
+  expect(progress.position).toBe(0.5);
   view.element.remove();
   document.body.append(view.element);
   continueToList();
   await vi.waitFor(() =>
     expect(PddClient.prototype.getOrders).toHaveBeenCalledTimes(2),
   );
+  await vi.waitFor(() => expect(progress.hasAttribute("value")).toBe(false));
+  expect(progress.position).toBe(-1);
   expect(root.querySelector("progress")).toBe(progress);
   expect(root.querySelector("form")).toBe(native);
   expect(input("pageSize")).toBe(size);
@@ -352,6 +358,43 @@ test("native drafts and progress nodes survive updates and moving the view", asy
     expect.any(Blob),
   );
 });
+
+test.each(["cancel", "dispose"] as const)(
+  "%s while a page is finishing does not request the next page",
+  async (mode) => {
+    let finishPage!: () => void;
+    let signal!: AbortSignal;
+    const nextPage = vi.fn();
+    const entry = sample.entries[0]!;
+    vi.mocked(collection.collectOrders).mockImplementationOnce(
+      async function* (_source, _options, active) {
+        signal = active;
+        yield {
+          total: 1,
+          orders: (async function* () {
+            yield entry;
+            await new Promise<void>((resolve) => {
+              finishPage = resolve;
+            });
+          })(),
+        };
+        nextPage();
+      },
+    );
+    const view = createView();
+    const { native, action, exports } = ui(view);
+    native.requestSubmit();
+    await vi.waitFor(() => expect(finishPage).toBeTypeOf("function"));
+    if (mode === "cancel") action("停止并保留结果").click();
+    else view.dispose();
+    expect(signal.aborted).toBe(true);
+    finishPage();
+    if (mode === "cancel")
+      await vi.waitFor(() => expect(exports()?.hidden ?? true).toBe(false));
+    else await updated();
+    expect(nextPage).not.toHaveBeenCalled();
+  },
+);
 
 test("the action button can stop a newly started task immediately", async () => {
   let signal!: AbortSignal;

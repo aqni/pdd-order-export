@@ -73,19 +73,20 @@ async function nextPage(stream: ReturnType<typeof collectOrders>) {
 }
 async function drain(stream: ReturnType<typeof collectOrders>) {
   const entries: CollectedOrder[] = [];
-  for await (const page of stream)
+  for await (const { orders: page } of stream)
     for await (const entry of page) entries.push(entry);
   return entries;
 }
 
-test("both paging and details advance lazily, without a separate page data wrapper", async () => {
+test("both paging and details advance lazily with an explicit page total", async () => {
   const api = source([
     [order("261017-a"), order("261017-b")],
     [order("261016-c")],
   ]);
   const pages = collectOrders(api, options, signal);
   expect(api.getOrders).not.toHaveBeenCalled();
-  const page = await nextPage(pages);
+  const { total, orders: page } = await nextPage(pages);
+  expect(total).toBe(2);
   expect(api.getOrders).toHaveBeenCalledOnce();
   expect(api.getOrderDetail).not.toHaveBeenCalled();
   expect("entries" in page).toBe(false);
@@ -107,7 +108,7 @@ test("skipping an inner iterator fetches no detail and outer cursors remain opaq
   const api = source([[first], [order("261016-b")]]);
   const pages = collectOrders(api, options, signal);
   await nextPage(pages);
-  const page = await nextPage(pages);
+  const { orders: page } = await nextPage(pages);
   expect(api.getOrderDetail).not.toHaveBeenCalled();
   expect(api.getOrders.mock.calls).toEqual([
     [null, 10, signal],
@@ -115,6 +116,50 @@ test("skipping an inner iterator fetches no detail and outer cursors remain opaq
   ]);
   await page.next();
   expect(api.getOrderDetail).toHaveBeenCalledWith("261016-b", signal);
+  await pages.return();
+});
+
+test("page totals count selected orders without reading details ahead", async () => {
+  const api = source([
+    [order("261018-new"), order("261017-kept"), order("261016-old")],
+  ]);
+  const pages = collectOrders(
+    api,
+    {
+      ...options,
+      startDate: new Date("2026-10-17"),
+      endDate: new Date("2026-10-17"),
+    },
+    signal,
+  );
+  const { total, orders: page } = await nextPage(pages);
+  expect(total).toBe(1);
+  expect(api.getOrderDetail).not.toHaveBeenCalled();
+  expect((await page.next()).value).toMatchObject({
+    order: { order_sn: "261017-kept" },
+  });
+  expect((await page.next()).done).toBe(true);
+  expect((await pages.next()).done).toBe(true);
+  expect(api.getOrders).toHaveBeenCalledOnce();
+});
+
+test("an empty selection has a zero total and can advance to the next page", async () => {
+  const api = source([[order("261018-new")], [order("261017-kept")]]);
+  const pages = collectOrders(
+    api,
+    { ...options, endDate: new Date("2026-10-17") },
+    signal,
+  );
+  const { total: emptyTotal, orders: empty } = await nextPage(pages);
+  expect(emptyTotal).toBe(0);
+  expect((await empty.next()).done).toBe(true);
+  expect(api.getOrderDetail).not.toHaveBeenCalled();
+  const { total, orders: page } = await nextPage(pages);
+  expect(total).toBe(1);
+  expect((await page.next()).value).toMatchObject({
+    order: { order_sn: "261017-kept" },
+  });
+  await page.return();
   await pages.return();
 });
 
@@ -159,7 +204,7 @@ test("the consumer retains yielded entries and breaks without fetching remaining
   const controller = new AbortController();
   const api = source([[order("261017-a"), order("261017-b")]]);
   const saved: CollectedOrder[] = [];
-  pages: for await (const page of collectOrders(
+  pages: for await (const { orders: page } of collectOrders(
     api,
     options,
     controller.signal,
@@ -187,7 +232,9 @@ test("cancellation during a detail request throws without generating a partial e
       active.throwIfAborted();
       return { orderSn: "unreachable", marker: "unreachable" };
     });
-  const page = await nextPage(collectOrders(api, options, controller.signal));
+  const { orders: page } = await nextPage(
+    collectOrders(api, options, controller.signal),
+  );
   const first = await page.next();
   await expect(page.next()).rejects.toBe(controller.signal.reason);
   expect(first.value).toMatchObject({ detail: { marker: "kept" } });
@@ -218,7 +265,7 @@ test("invalid dates reject page selection before any detail request", async () =
 test("list-only iteration accepts opaque IDs and consumer break needs no detail request", async () => {
   const api = source([[order("not-a-date"), order("another")]]);
   const saved: CollectedOrder[] = [];
-  pages: for await (const page of collectOrders(
+  pages: for await (const { orders: page } of collectOrders(
     api,
     { ...options, includeDetails: false },
     signal,

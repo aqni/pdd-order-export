@@ -46,7 +46,7 @@ test("panel dimensions stay compact when the site uses a large root font", async
   await page.screenshot({ path: test.info().outputPath("mobile.png") });
 });
 
-test("native descriptions preserve control interactions and progress is indeterminate", async ({
+test("native descriptions preserve control interactions and page progress starts at zero", async ({
   shop,
 }) => {
   const { page, dialog, fixture, release } = shop;
@@ -68,7 +68,8 @@ test("native descriptions preserve control interactions and progress is indeterm
   await dialog.getByRole("button", { name: "开始收集", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => fixture.requests.length).toBe(2);
-  await expect(dialog.getByRole("progressbar")).not.toHaveAttribute("value");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("value", "0");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("max", "2");
   await expect(dialog.getByRole("heading", { name: "收集进度" })).toBeVisible();
   fixture.holdDetails = false;
   release();
@@ -275,6 +276,13 @@ test("closing cancels a blocked detail and reopening retains already yielded ord
   fixture.allowDetails = 1;
   await dialog.getByRole("button", { name: "开始收集" }).click();
   await expect.poll(() => fixture.requests.length).toBe(3);
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("value", "1");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("max", "2");
+  expect(
+    await dialog
+      .getByRole("progressbar")
+      .evaluate((element) => (element as HTMLProgressElement).position),
+  ).toBe(0.5);
   await dialog.getByRole("button", { name: "停止并关闭", exact: true }).click();
   await page.getByRole("button", { name: "导出账单", exact: true }).click();
   const exportJson = dialog.getByRole("button", {

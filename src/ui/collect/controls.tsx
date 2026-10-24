@@ -100,6 +100,7 @@ export class CollectControls extends Component<
       pages: 0,
       orders: 0,
       details: 0,
+      currentPage: null,
     };
     const publishProgress = () =>
       this.setState({
@@ -107,29 +108,37 @@ export class CollectControls extends Component<
         progress,
       });
     try {
-      collection: for await (const page of collectOrders(
+      collection: for await (const { total, orders } of collectOrders(
         client,
         options,
         controller.signal,
       )) {
         if (controller !== this.#controller) return;
         if (controller.signal.aborted) break;
+        let completed = 0;
         progress = {
           ...progress,
           pages: progress.pages + 1,
+          currentPage: { completed, total },
         };
         publishProgress();
-        for await (const entry of page) {
+        for await (const entry of orders) {
           if (controller !== this.#controller) return;
           entries.push(entry);
+          completed++;
           progress = {
             ...progress,
             orders: entries.length,
             details: progress.details + (entry.detail === null ? 0 : 1),
+            currentPage: { completed, total },
           };
           publishProgress();
           if (controller.signal.aborted) break collection;
         }
+        if (controller !== this.#controller) return;
+        if (controller.signal.aborted) break;
+        progress = { ...progress, currentPage: null };
+        publishProgress();
       }
     } catch (error) {
       if (controller !== this.#controller) return;

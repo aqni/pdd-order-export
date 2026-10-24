@@ -9,7 +9,7 @@ import sample from "../fixtures/orders/reviewed-orders/collected.json" with { ty
 
 async function drain(pages: ReturnType<typeof collectOrders>) {
   const entries: CollectedOrder[] = [];
-  for await (const page of pages)
+  for await (const { orders: page } of pages)
     for await (const entry of page) entries.push(entry);
   return entries;
 }

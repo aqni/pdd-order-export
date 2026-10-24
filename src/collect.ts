@@ -17,17 +17,24 @@ export async function* collectOrders(
     assertCollectionOptions(collectionOptions);
   let cursor: string | null = null;
   for (let page = 0; page < maxPages; page++) {
-    const orders = await source.getOrders(cursor, pageSize, signal);
-    if (orders.length === 0) return;
+    const pageOrders = await source.getOrders(cursor, pageSize, signal);
+    if (pageOrders.length === 0) return;
     const { selectedOrders, reachedStart } = selectPageOrders(
-      orders,
+      pageOrders,
       startDate,
       endDate,
     );
-    yield collectPageOrders(source, selectedOrders, includeDetails, signal);
+    const total = selectedOrders.length;
+    const orders = collectPageOrders(
+      source,
+      selectedOrders,
+      includeDetails,
+      signal,
+    );
+    yield { total, orders };
     if (reachedStart) return;
     // 上游游标不透明，不能从订单号或页数推算。
-    cursor = orders.at(-1)!.offset;
+    cursor = pageOrders.at(-1)!.offset;
   }
 }
 
@@ -39,7 +46,10 @@ type CollectionOptions = {
   includeDetails: boolean;
 };
 
-type OrderPage = AsyncGenerator<CollectedOrder, void, void>;
+type OrderPage = {
+  readonly total: number;
+  readonly orders: AsyncGenerator<CollectedOrder, void, void>;
+};
 
 const assertCollectionOptions = createAssert<CollectionOptions>();
 
@@ -66,7 +76,7 @@ async function* collectPageOrders(
   orders: readonly Order[],
   includeDetails: boolean,
   signal: AbortSignal,
-): OrderPage {
+): AsyncGenerator<CollectedOrder, void, void> {
   for (const order of orders) {
     const detail = includeDetails
       ? await source.getOrderDetail(order.order_sn, signal)
