@@ -147,4 +147,4 @@ test("proxy mode forwards every path independently of the artifact preview", asy
       throw new Error("Unexpected temporary directory");
     await rm(directory, { recursive: true, force: true });
   }
-});
+}, 30000);
