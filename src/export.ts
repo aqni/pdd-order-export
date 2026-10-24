@@ -84,7 +84,7 @@ export function downloadFile({
 }
 
 function toCsv(result: ReadonlyExportResult): string {
-  return unparse(toTable(result));
+  return unparse(toTable(result), { escapeFormulae: true });
 }
 
 function toJson(result: ReadonlyExportResult): string {

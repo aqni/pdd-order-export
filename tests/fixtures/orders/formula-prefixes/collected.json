@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-10-24T10:00:00.000Z",
+  "finishedAt": "2026-10-24T10:01:00.000Z",
+  "options": {
+    "startDate": "",
+    "endDate": "",
+    "pageSize": 10,
+    "maxPages": 10,
+    "includeDetails": true
+  },
+  "reason": "end",
+  "complete": true,
+  "error": null,
+  "progress": {
+    "pages": 2,
+    "scanned": 1,
+    "selected": 1
+  },
+  "entries": [
+    {
+      "order": {
+        "order_sn": "=1+1",
+        "offset": "synthetic",
+        "order_amount": 199,
+        "mall": { "mall_name": "+1+1" },
+        "order_status_prompt": "-1+1"
+      },
+      "detail": {
+        "orderSn": "=1+1",
+        "orderDescList": [
+          { "key": "支付方式", "value": "@SUM(1)" },
+          { "key": "下单时间", "value": "\t=1+1" },
+          { "key": "物流公司", "value": "\r=1+1" },
+          { "key": "快递单号", "value": "00012345678901234567" }
+        ]
+      }
+    }
+  ]
+}
