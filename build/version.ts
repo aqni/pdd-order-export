@@ -15,9 +15,7 @@ function isReleaseTag(tag: string | null | undefined): tag is string {
   );
 }
 
-export function assertReleaseTag(
-  tag: string | undefined,
-): asserts tag is string {
+function assertReleaseTag(tag: string | undefined): asserts tag is string {
   if (!isReleaseTag(tag)) {
     throw new Error(
       "Expected a release tag in vYYYY-MM-DD or vYYYY-MM-DD.N format, with a valid date and no leading zeros in N.",
@@ -26,10 +24,7 @@ export function assertReleaseTag(
 }
 
 /** 发布采用触发 Release 的 tag；其他构建推导提交距离、哈希及脏状态。 */
-export function getUserscriptVersion(
-  directory: string,
-  environment: NodeJS.ProcessEnv = process.env,
-) {
+export function getUserscriptVersion(directory: string) {
   const info = gitDescribe.gitDescribeSync(directory, {
     match: dateTagPattern,
     customArguments: ["--match", `${dateTagPattern}.[0-9]*`],
@@ -41,9 +36,9 @@ export function getUserscriptVersion(
   }
 
   const dirtyDate = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  if (environment.GITHUB_EVENT_NAME === "release") {
+  if (process.env.GITHUB_EVENT_NAME === "release") {
     // 同一提交可能有多个 tag，git describe 选择的未必是本次发布版本。
-    const tag = environment.GITHUB_REF_NAME;
+    const tag = process.env.GITHUB_REF_NAME;
     assertReleaseTag(tag);
     const currentTag = execFileSync(
       "git",
