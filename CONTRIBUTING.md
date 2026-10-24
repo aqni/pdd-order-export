@@ -20,13 +20,13 @@ npm run preview
 
 产物位于 `dist/`，不压缩并经过排版，不提交到仓库。运行时依赖通过 `vite.config.ts` 的 `externalGlobals` 加载固定版本的官方浏览器产物。安装依赖时保留可选依赖，不使用 `--omit=optional`。
 
-面板使用 Preact 和 TSX。`src/ui/` 按职责划分为 `collect/`、`export/`、`dialog/`，各区域通过 `index.ts` 暴露接口；表单内部组件位于 `collect/form/`。收集区域管理任务、取消与进度，表单字段保存草稿，导出区域持有结果快照，入口只连接区域接口。
+面板使用 Vue runtime-only 和 TSX。`src/ui/` 按职责划分为 `collect/`、`export/`、`dialog/`，各区域通过 `index.ts` 暴露接口；表单内部组件位于 `collect/form/`。收集区域管理任务、取消与进度，表单集中保存响应式草稿，字段通过 `v-model` 更新草稿，摘要通过 `computed` 推导。入口以 `shallowRef` 保存结果快照并传给导出区域，避免代理订单数据。
 
 `main.ts` 将面板和独立的 `ui/styles.css` 挂载到 Shadow Root，隔离站点样式。样式按组件区域组织，用 `@scope` 限制选择器范围；原生字段和操作按钮共用一个表单树，保留浏览器的约束校验、回车提交和焦点行为。以桌面布局为主，窄屏只做基本防溢出。
 
 优先使用原生控件。弹层通过 `command="show-modal"` 打开，通过 `<form method="dialog">` 或 Esc 收起；收起不停止任务。文件操作由下载组件处理，失败使用原生 `alert`，补充说明使用 `title`。
 
-JSX 编译为 Preact 的 `h` 调用。构建保留许可证和 JSDoc，移除优化注解，再由 Prettier 排版。
+TSX 通过官方 `@vitejs/plugin-vue-jsx` 编译，不在浏览器中编译模板。Vue 通过固定版本的官方 `vue.runtime.global.prod.js` 外置加载；该产物是暴露 `Vue` 全局变量的 IIFE，不是 UMD。构建保留许可证和 JSDoc，移除优化注解，再由 Prettier 排版。
 
 ### 本地反向代理
 

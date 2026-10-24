@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { h, render } from "preact";
+import { h, render } from "vue";
 import { ExportPanel } from "../../src/ui";
 import stylesheet from "../../src/ui/styles.css?style";
 import { PddClient, PddError, type Order } from "../../src/pdd";
@@ -119,6 +119,37 @@ test("multiple views keep independent style nodes when one element is moved", ()
   document.body.append(first.element);
   expect(first.element.shadowRoot!.querySelector("style")).toBe(firstStyle);
   expect(second.element.shadowRoot!.querySelector("style")).toBe(secondStyle);
+});
+
+test("draft bindings update the summary without changing the collected snapshot", async () => {
+  mockResult();
+  const { root, native, input, action, exports } = ui(createView());
+  const summary = root.querySelector(".settings summary small")!;
+  input("startDate").value = "2026-10-17";
+  input("startDate").dispatchEvent(new Event("input", { bubbles: true }));
+  input("endDate").value = "2026-10-18";
+  input("endDate").dispatchEvent(new Event("input", { bubbles: true }));
+  input("includeDetails").checked = false;
+  input("includeDetails").dispatchEvent(new Event("change", { bubbles: true }));
+  await vi.waitFor(() =>
+    expect(summary.textContent).toBe("2026-10-17 至 2026-10-18 · 仅列表"),
+  );
+  expect(input("endDate").min).toBe("2026-10-17");
+  native.requestSubmit();
+  await vi.waitFor(() => expect(exports()?.hidden ?? true).toBe(false));
+  input("startDate").value = "2026-10-01";
+  input("startDate").dispatchEvent(new Event("input", { bubbles: true }));
+  await vi.waitFor(() =>
+    expect(summary.textContent).toBe("2026-10-01 至 2026-10-18 · 仅列表"),
+  );
+  action("导出 JSON").click();
+  expect(files.exportFile).toHaveBeenLastCalledWith(
+    sample.entries,
+    "json",
+    new Date("2026-10-17T00:00:00.000Z"),
+    new Date("2026-10-18T00:00:00.000Z"),
+    false,
+  );
 });
 
 test("collection preserves settings and requires an explicit export interaction", async () => {

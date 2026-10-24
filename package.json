@@ -27,13 +27,13 @@
     "@ttsc/unplugin": "0.33.1",
     "@types/node": "^24.19.2",
     "@types/papaparse": "5.5.2",
+    "@vitejs/plugin-vue-jsx": "5.1.6",
     "acorn": "8.19.0",
     "fflate": "0.8.3",
     "git-describe": "^4.1.1",
     "jsdom": "^26.1.0",
     "papaparse": "5.7.0",
     "playwright": "^1.64.1",
-    "preact": "10.29.8",
     "prettier": "^3.6.0",
     "ttsc": "0.33.1",
     "typescript": "7.0.2",
@@ -41,6 +41,7 @@
     "vite": "^8.0.0",
     "vite-plugin-monkey": "^8.1.1",
     "vitest": "^5.0.5",
+    "vue": "3.5.44",
     "wretch": "3.0.9"
   }
 }

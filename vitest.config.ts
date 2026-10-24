@@ -1,8 +1,9 @@
 import { defineConfig } from "vitest/config";
 import ttsc from "@ttsc/unplugin/vite";
+import vueJsx from "@vitejs/plugin-vue-jsx";
 
 export default defineConfig({
-  plugins: [ttsc()],
+  plugins: [ttsc(), vueJsx()],
   test: {
     clearMocks: true,
     restoreMocks: true,

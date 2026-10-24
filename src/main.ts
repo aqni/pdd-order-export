@@ -1,4 +1,4 @@
-import { h, render } from "preact";
+import { createApp } from "vue";
 import { ExportPanel } from "./ui";
 import stylesheet from "./ui/styles.css?style";
 
@@ -11,10 +11,11 @@ if (!document.getElementById(hostId)) {
   const shadow = host.attachShadow({ mode: "open" });
   shadow.append(stylesheet.cloneNode(true), mountNode);
   host.id = hostId;
-  render(h(ExportPanel, {}), mountNode);
+  const app = createApp(ExportPanel);
+  app.mount(mountNode);
   document.body.append(host);
   import.meta.hot?.dispose(() => {
-    render(null, mountNode);
+    app.unmount();
     shadow.replaceChildren();
     host.remove();
   });

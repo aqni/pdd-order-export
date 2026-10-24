@@ -1,4 +1,4 @@
-import { Component, h } from "preact";
+import { defineComponent, onBeforeUnmount, shallowReactive } from "vue";
 import { PddClient, PddError } from "../../pdd";
 import { collectOrders, type CollectedOrder } from "../../collect";
 import { CollectForm, type CollectOptions, type CollectStatus } from "./form";
@@ -6,140 +6,150 @@ import { CollectFeedback } from "./feedback";
 import type { CollectCounts } from "./progress";
 
 /** 收集区域拥有任务、取消和进度，只向外交付结果快照。 */
-export class CollectControls extends Component<
-  {
+export const CollectControls = defineComponent(
+  (props: {
     onStart: () => void;
     onFinish: (result: CollectResult | null) => void;
-  },
-  CollectionState
-> {
-  state: CollectionState = { status: "idle", progress: null, error: null };
-  #controller: AbortController | null = null;
-  #disposed = false;
-
-  render() {
-    return (
-      <div data-ui="collect">
-        <CollectForm
-          status={this.state.status}
-          onCollect={this.#collect}
-          onCancel={this.#cancel}
-        />
-        <CollectFeedback {...this.state} />
-      </div>
-    );
-  }
-  componentWillUnmount() {
-    this.#disposed = true;
-    this.#controller?.abort();
-    this.#controller = null;
-  }
-  #prepare() {
-    if (this.#disposed || this.#controller) return null;
-    try {
-      return new PddClient();
-    } catch (error) {
-      // 准备失败不触发开始通知，保留上一次可导出的结果。
-      this.setState({ error: describeError(error) });
-      return null;
-    }
-  }
-  #finish(result: CollectResult | null, error: string | null = null) {
-    this.#controller = null;
-    this.setState({
-      status: result ? "complete" : "idle",
+  }) => {
+    const state = shallowReactive<CollectionState>({
+      status: "idle",
       progress: null,
-      error,
+      error: null,
     });
-    this.props.onFinish(result);
-  }
-  #collect = async (options: CollectOptions) => {
-    const client = this.#prepare();
-    if (!client) return;
-    const controller = new AbortController();
-    this.#controller = controller;
-    this.setState({ status: "collecting", progress: null, error: null });
-    this.props.onStart();
-    const entries: CollectedOrder[] = [];
-    let pages = 0;
-    try {
-      pages = await this.#readPages(client, options, controller, entries);
-    } catch (error) {
-      if (controller !== this.#controller) return;
-      if (!controller.signal.aborted) {
-        this.#finish(null, describeError(error));
-        return;
+    let controller: AbortController | null = null;
+    let disposed = false;
+
+    onBeforeUnmount(() => {
+      disposed = true;
+      controller?.abort();
+      controller = null;
+    });
+
+    function prepare() {
+      if (disposed || controller) return null;
+      try {
+        return new PddClient();
+      } catch (error) {
+        // 准备失败不触发开始通知，保留上一次可导出的结果。
+        state.error = describeError(error);
+        return null;
       }
-      // 取消时交付已收到的条目；普通请求失败不交付部分结果。
     }
-    if (controller !== this.#controller) return;
-    this.#finish({
-      entries,
-      partial: controller.signal.aborted || pages >= options.maxPages,
-      startDate: options.startDate,
-      endDate: options.endDate,
-    });
-  };
-  async #readPages(
-    client: PddClient,
-    options: CollectOptions,
-    controller: AbortController,
-    entries: CollectedOrder[],
-  ) {
-    let progress: CollectCounts = {
-      pages: 0,
-      orders: 0,
-      details: 0,
-      currentPage: null,
-    };
-    collection: for await (const { total, orders } of collectOrders(
-      client,
-      options,
-      controller.signal,
-    )) {
-      if (controller !== this.#controller || controller.signal.aborted) break;
-      let completed = 0;
-      progress = {
-        ...progress,
-        pages: progress.pages + 1,
-        currentPage: { completed, total },
+
+    function finish(result: CollectResult | null, error: string | null = null) {
+      controller = null;
+      Object.assign(state, {
+        status: result ? "complete" : "idle",
+        progress: null,
+        error,
+      });
+      props.onFinish(result);
+    }
+
+    async function collect(options: CollectOptions) {
+      const client = prepare();
+      if (!client) return;
+      const active = new AbortController();
+      controller = active;
+      Object.assign(state, {
+        status: "collecting",
+        progress: null,
+        error: null,
+      });
+      props.onStart();
+      const entries: CollectedOrder[] = [];
+      let pages = 0;
+      try {
+        pages = await readPages(client, options, active, entries);
+      } catch (error) {
+        if (active !== controller) return;
+        if (!active.signal.aborted) {
+          finish(null, describeError(error));
+          return;
+        }
+        // 取消时交付已收到的条目；普通请求失败不交付部分结果。
+      }
+      if (active !== controller) return;
+      finish({
+        entries,
+        partial: active.signal.aborted || pages >= options.maxPages,
+        startDate: options.startDate,
+        endDate: options.endDate,
+      });
+    }
+
+    async function readPages(
+      client: PddClient,
+      options: CollectOptions,
+      active: AbortController,
+      entries: CollectedOrder[],
+    ) {
+      let progress: CollectCounts = {
+        pages: 0,
+        orders: 0,
+        details: 0,
+        currentPage: null,
       };
-      this.#publish(controller, progress);
-      for await (const entry of orders) {
-        if (controller !== this.#controller) break collection;
-        entries.push(entry);
-        completed++;
+      collection: for await (const { total, orders } of collectOrders(
+        client,
+        options,
+        active.signal,
+      )) {
+        if (active !== controller || active.signal.aborted) break;
+        let completed = 0;
         progress = {
           ...progress,
-          orders: entries.length,
-          details: progress.details + (entry.detail === null ? 0 : 1),
+          pages: progress.pages + 1,
           currentPage: { completed, total },
         };
-        this.#publish(controller, progress);
-        if (controller.signal.aborted) break collection;
+        publish(active, progress);
+        for await (const entry of orders) {
+          if (active !== controller) break collection;
+          entries.push(entry);
+          completed++;
+          progress = {
+            ...progress,
+            orders: entries.length,
+            details: progress.details + (entry.detail === null ? 0 : 1),
+            currentPage: { completed, total },
+          };
+          publish(active, progress);
+          if (active.signal.aborted) break collection;
+        }
+        if (active !== controller || active.signal.aborted) break;
+        progress = { ...progress, currentPage: null };
+        publish(active, progress);
       }
-      if (controller !== this.#controller || controller.signal.aborted) break;
-      progress = { ...progress, currentPage: null };
-      this.#publish(controller, progress);
+      return progress.pages;
     }
-    return progress.pages;
-  }
-  #publish(controller: AbortController, progress: CollectCounts) {
-    this.setState({
-      status: controller.signal.aborted ? "cancelling" : "collecting",
-      progress,
-    });
-  }
-  #cancel = () => {
-    const controller = this.#controller;
-    if (!controller) return false;
-    if (!controller.signal.aborted) {
-      controller.abort();
-      this.setState({ status: "cancelling" });
+
+    function publish(active: AbortController, progress: CollectCounts) {
+      state.status = active.signal.aborted ? "cancelling" : "collecting";
+      state.progress = progress;
     }
-    return true;
-  };
-}
+
+    function cancel() {
+      if (!controller) return false;
+      if (!controller.signal.aborted) {
+        controller.abort();
+        state.status = "cancelling";
+      }
+      return true;
+    }
+
+    return () => (
+      <div data-ui="collect">
+        <CollectForm
+          status={state.status}
+          onCollect={collect}
+          onCancel={cancel}
+        />
+        <CollectFeedback {...state} />
+      </div>
+    );
+  },
+  { props: ["onStart", "onFinish"] },
+);
 
 export interface CollectResult {
   readonly entries: readonly CollectedOrder[];

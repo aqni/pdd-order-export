@@ -1,4 +1,3 @@
-import { h } from "preact";
 import type { CollectionState } from "./controls";
 import { CollectProgress } from "./progress";
 

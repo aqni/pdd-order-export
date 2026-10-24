@@ -1,4 +1,4 @@
-import { h, type RefObject } from "preact";
+import type { ShallowRef } from "vue";
 import type { CollectStatus } from "./form";
 
 const labels: Record<CollectStatus, string> = {
@@ -15,7 +15,7 @@ export function CollectAction({
   onCancel,
 }: {
   form: string;
-  buttonRef: RefObject<HTMLButtonElement>;
+  buttonRef: ShallowRef<HTMLButtonElement | null>;
   status: CollectStatus;
   onCancel: () => boolean;
 }) {

@@ -102,7 +102,7 @@ async function openShop(testInfo: TestInfo) {
     ["papaparse", "papaparse.min.js"],
     ["acorn", "dist/acorn.js"],
     ["wretch", "dist/bundle/wretch.min.js"],
-    ["preact", "dist/preact.umd.js"],
+    ["vue", "dist/vue.runtime.global.prod.js"],
   ]) {
     const packagePath = require.resolve(name + "/package.json");
     const { version } = require(packagePath);

@@ -1,62 +1,61 @@
-import { Component, createRef, h } from "preact";
+import { computed, defineComponent } from "vue";
 import { CollectDateRange } from "./date-range";
 import { CollectDetailsOption } from "./details-option";
 import { CollectRequestSettings } from "./request-settings";
-import type { CollectOptions } from "./form";
 
-/** 组合字段和折叠摘要，通过组件接口读取选项。 */
-export class CollectSettings extends Component<
-  { disabled: boolean },
-  { summary: string }
-> {
-  state = { summary: "不限日期 · 含详情" };
-  readonly #details = createRef<HTMLDetailsElement>();
-  readonly #dates = createRef<CollectDateRange>();
-  readonly #includeDetails = createRef<CollectDetailsOption>();
-  readonly #requests = createRef<CollectRequestSettings>();
+export interface CollectDraft {
+  startDate: string;
+  endDate: string;
+  includeDetails: boolean;
+  pageSize: number | string;
+  maxPages: number | string;
+}
 
-  render(
-    { disabled }: { disabled: boolean },
-    { summary }: { summary: string },
-  ) {
-    return (
+interface Props {
+  draft: CollectDraft;
+  disabled: boolean;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+}
+
+/** 摘要由草稿推导；字段通过同一份响应式模型协作，不再暴露 read 接口。 */
+export const CollectSettings = defineComponent(
+  (props: Props) => {
+    const summary = computed(() => {
+      const { startDate, endDate, includeDetails } = props.draft;
+      const dates =
+        !startDate && !endDate
+          ? "不限日期"
+          : `${startDate || "不限"} 至 ${endDate || "不限"}`;
+      return dates + (includeDetails ? " · 含详情" : " · 仅列表");
+    });
+
+    return () => (
       <details
         data-ui="collect-settings"
         class="settings"
-        open
-        ref={this.#details}
-        onInput={this.#summarize}
-        onInvalidCapture={() => {
-          this.#details.current!.open = true;
+        open={props.expanded}
+        onToggle={(event) =>
+          props.onExpandedChange(
+            (event.currentTarget as HTMLDetailsElement).open,
+          )
+        }
+        onInvalidCapture={(event) => {
+          (event.currentTarget as HTMLDetailsElement).open = true;
+          props.onExpandedChange(true);
         }}
       >
         <summary>
           <span>收集设置</span>
-          <small>{summary}</small>
+          <small>{summary.value}</small>
         </summary>
-        <fieldset disabled={disabled}>
-          <CollectDateRange ref={this.#dates} />
-          <CollectDetailsOption ref={this.#includeDetails} />
-          <CollectRequestSettings ref={this.#requests} />
+        <fieldset disabled={props.disabled}>
+          <CollectDateRange draft={props.draft} />
+          <CollectDetailsOption draft={props.draft} />
+          <CollectRequestSettings draft={props.draft} />
         </fieldset>
       </details>
     );
-  }
-  collapse() {
-    this.#details.current!.open = false;
-  }
-  read(): CollectOptions {
-    this.#summarize();
-    return {
-      ...this.#dates.current!.read(),
-      ...this.#requests.current!.read(),
-      includeDetails: this.#includeDetails.current!.checked,
-    };
-  }
-  #summarize = () => {
-    const summary =
-      this.#dates.current!.description +
-      (this.#includeDetails.current!.checked ? " · 含详情" : " · 仅列表");
-    if (summary !== this.state.summary) this.setState({ summary });
-  };
-}
+  },
+  { props: ["draft", "disabled", "expanded", "onExpandedChange"] },
+);

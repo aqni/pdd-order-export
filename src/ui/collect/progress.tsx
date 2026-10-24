@@ -1,5 +1,3 @@
-import { h } from "preact";
-
 /** 按消费方已收到的数据展示进度，总量未知时使用原生不定进度条。 */
 export function CollectProgress({ cancelling, counts }: CollectProgressProps) {
   const page = counts?.currentPage;

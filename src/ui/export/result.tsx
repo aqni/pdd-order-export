@@ -1,4 +1,3 @@
-import { h } from "preact";
 import type { CollectResult } from "../collect";
 
 export function ExportResult({

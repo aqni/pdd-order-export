@@ -1,6 +1,13 @@
-import { Component, createRef, h } from "preact";
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  reactive,
+  shallowRef,
+  watch,
+} from "vue";
 import type { collectOrders } from "../../../collect";
-import { CollectSettings } from "./settings";
+import { CollectSettings, type CollectDraft } from "./settings";
 import { CollectAction } from "./action";
 
 export type CollectOptions = Parameters<typeof collectOrders>[1];
@@ -11,60 +18,84 @@ interface Props {
   onCancel: () => boolean;
 }
 
-/** 只协调原生提交、任务期间禁用和焦点；字段草稿留在内部组件。 */
-export class CollectForm extends Component<Props> {
-  readonly #id = `pdd-collect-${crypto.randomUUID()}`;
-  readonly #form = createRef<HTMLFormElement>();
-  readonly #settings = createRef<CollectSettings>();
-  readonly #action = createRef<HTMLButtonElement>();
+/** 草稿集中在表单；原生校验和焦点保留在 DOM，提交时生成独立快照。 */
+export const CollectForm = defineComponent(
+  (props: Props) => {
+    const id = `pdd-collect-${crypto.randomUUID()}`;
+    const form = shallowRef<HTMLFormElement | null>(null);
+    const action = shallowRef<HTMLButtonElement | null>(null);
+    const expanded = shallowRef(true);
+    const draft = reactive<CollectDraft>({
+      startDate: "",
+      endDate: "",
+      includeDetails: true,
+      pageSize: 20,
+      maxPages: 100,
+    });
+    const busy = computed(
+      () => props.status === "collecting" || props.status === "cancelling",
+    );
 
-  render({ status, onCancel }: Props) {
-    return (
+    watch(
+      () => props.status,
+      async (status) => {
+        if (status !== "collecting") return;
+        const moveFocus = form.value!.matches(":focus-within");
+        expanded.value = false;
+        await nextTick();
+        if (moveFocus) action.value?.focus({ preventScroll: true });
+      },
+    );
+
+    function submit(event: Event) {
+      event.preventDefault();
+      if (busy.value) return;
+      const native = form.value!;
+      // FormData 也覆盖浏览器自动填充和未派发 input 的原生值更新。
+      const data = new FormData(native);
+      Object.assign(draft, {
+        startDate: String(data.get("startDate") ?? ""),
+        endDate: String(data.get("endDate") ?? ""),
+        includeDetails: data.has("includeDetails"),
+        pageSize: Number(data.get("pageSize")),
+        maxPages: Number(data.get("maxPages")),
+      });
+      const end = native.elements.namedItem("endDate") as HTMLInputElement;
+      end.min = draft.startDate;
+      if (!native.reportValidity()) return;
+      props.onCollect({
+        startDate: readDate(draft.startDate),
+        endDate: readDate(draft.endDate),
+        includeDetails: draft.includeDetails,
+        pageSize: Number(draft.pageSize),
+        maxPages: Number(draft.maxPages),
+      });
+    }
+
+    return () => (
       <div data-ui="collect-form">
-        <form
-          id={this.#id}
-          ref={this.#form}
-          aria-label="收集设置"
-          onSubmit={this.#submit}
-        >
+        <form id={id} ref={form} aria-label="收集设置" onSubmit={submit}>
           <CollectSettings
-            ref={this.#settings}
-            disabled={status === "collecting" || status === "cancelling"}
+            draft={draft}
+            disabled={busy.value}
+            expanded={expanded.value}
+            onExpandedChange={(value) => {
+              expanded.value = value;
+            }}
           />
         </form>
         <CollectAction
-          form={this.#id}
-          buttonRef={this.#action}
-          status={status}
-          onCancel={onCancel}
+          form={id}
+          buttonRef={action}
+          status={props.status}
+          onCancel={props.onCancel}
         />
       </div>
     );
-  }
-  getSnapshotBeforeUpdate(previous: Props) {
-    return (
-      this.props.status === "collecting" &&
-      previous.status !== "collecting" &&
-      this.#form.current!.matches(":focus-within")
-    );
-  }
-  componentDidUpdate(previous: Props, _state: unknown, moveFocus: boolean) {
-    if (
-      this.props.status === "collecting" &&
-      previous.status !== "collecting"
-    ) {
-      this.#settings.current!.collapse();
-      if (moveFocus) this.#action.current!.focus({ preventScroll: true });
-    }
-  }
-  #submit = (event: Event) => {
-    event.preventDefault();
-    if (
-      this.props.status === "collecting" ||
-      this.props.status === "cancelling"
-    )
-      return;
-    const options = this.#settings.current!.read();
-    if (this.#form.current!.reportValidity()) this.props.onCollect(options);
-  };
+  },
+  { props: ["status", "onCollect", "onCancel"] },
+);
+
+function readDate(value: string): Date | null {
+  return value ? new Date(`${value}T00:00:00.000Z`) : null;
 }

@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import ttsc from "@ttsc/unplugin/vite";
+import vueJsx from "@vitejs/plugin-vue-jsx";
 import monkey, { cdn } from "vite-plugin-monkey";
 import proxyConfig from "./build/proxy.ts";
 import { getUserscriptVersion } from "./build/version.ts";
@@ -19,7 +20,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
     // 避免依赖扫描阶段再次触发应用 TypeScript 的 Typia 编译。
     optimizeDeps: {
       noDiscovery: true,
-      include: ["papaparse", "acorn", "wretch", "typia", "preact"],
+      include: ["papaparse", "acorn", "wretch", "typia", "vue"],
     },
     build: {
       target: "chrome136",
@@ -32,11 +33,12 @@ export default defineConfig(({ mode, command, isPreview }) => {
     // monkey 处理最终用户脚本包装，放在源码转换插件之后。
     plugins: [
       ttsc(),
+      vueJsx(),
       monkey({
         entry: "src/main.ts",
         build: {
           externalGlobals: {
-            preact: cdn.jsdelivr("preact", "dist/preact.umd.js"),
+            vue: cdn.jsdelivr("Vue", "dist/vue.runtime.global.prod.js"),
             papaparse: cdn.jsdelivr("Papa", "papaparse.min.js"),
             acorn: cdn.jsdelivr("acorn", "dist/acorn.js"),
             wretch: cdn.jsdelivr("wretch", "dist/bundle/wretch.min.js"),

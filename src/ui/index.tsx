@@ -1,27 +1,21 @@
-import { Component, createRef, h } from "preact";
+import { defineComponent, shallowRef } from "vue";
 import { CollectControls, type CollectResult } from "./collect";
 import { ExportControls } from "./export";
 import { ExportDialog } from "./dialog";
 
-/** 只连接区域接口；收集任务和结果分别由各自组件持有。 */
-export class ExportPanel extends Component {
-  readonly #exports = createRef<ExportControls>();
-
-  render() {
-    return (
-      <div data-ui="panel">
-        <ExportDialog>
-          <CollectControls onStart={this.#onStart} onFinish={this.#onFinish} />
-          <ExportControls ref={this.#exports} />
-        </ExportDialog>
-      </div>
-    );
-  }
-
-  #onStart = () => {
-    this.#exports.current!.setResult(null);
+/** 结果以浅引用保存，不代理订单数据；进度更新留在收集区域。 */
+export const ExportPanel = defineComponent(() => {
+  const result = shallowRef<CollectResult | null>(null);
+  const setResult = (value: CollectResult | null) => {
+    result.value = value;
   };
-  #onFinish = (result: CollectResult | null) => {
-    this.#exports.current!.setResult(result);
-  };
-}
+
+  return () => (
+    <div data-ui="panel">
+      <ExportDialog>
+        <CollectControls onStart={() => setResult(null)} onFinish={setResult} />
+        <ExportControls result={result.value} />
+      </ExportDialog>
+    </div>
+  );
+});

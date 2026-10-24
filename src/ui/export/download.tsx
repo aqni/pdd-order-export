@@ -1,4 +1,3 @@
-import { h } from "preact";
 import type { CollectResult } from "../collect";
 import { downloadFile, exportFile } from "../../export";
 
@@ -21,7 +20,8 @@ export function ExportDownload({
       type="button"
       title={descriptions[format]}
       onClick={(event) => {
-        if (event.currentTarget.isConnected) save(result, format);
+        if ((event.currentTarget as HTMLButtonElement).isConnected)
+          save(result, format);
       }}
     >
       {`导出${result.partial ? "部分" : ""} ${format.toUpperCase()}`}
