@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { createServer as httpServer, get } from "node:http";
 import type { AddressInfo } from "node:net";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
@@ -6,7 +6,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createServer, preview } from "vite";
 
+afterEach(() => vi.unstubAllEnvs());
+
 test("proxy mode forwards every path independently of the artifact preview", async () => {
+  vi.stubEnv("BROWSER", "none");
   const requests: { path: string; origin?: string; referer?: string }[] = [];
   const redirects = new Map([["/redirect", "/orders.html?from=redirect"]]);
   const upstream = httpServer((request, response) => {
@@ -40,15 +43,17 @@ test("proxy mode forwards every path independently of the artifact preview", asy
       mode: "test",
       logLevel: "silent",
       build: { outDir: directory },
-      preview: { port: 0 },
+      preview: { port: 0, open: false },
     });
     server = await createServer({
       configFile: "vite.config.ts",
       mode: "proxy",
       logLevel: "silent",
-      server: { port: 0, proxy: { "/": { target } } },
+      server: { port: 0, open: false, proxy: { "/": { target } } },
     });
     await server.listen();
+    expect(server.config.server.open).toBe(false);
+    expect(artifactPreview.config.preview.open).toBe(false);
     const base =
       "http://127.0.0.1:" + (server.httpServer!.address() as AddressInfo).port;
     const installBase =
@@ -138,10 +143,7 @@ test("proxy mode forwards every path independently of the artifact preview", asy
     ]);
   } finally {
     await server?.close();
-    if (artifactPreview)
-      await new Promise<void>((done) =>
-        artifactPreview!.httpServer.close(() => done()),
-      );
+    await artifactPreview?.close();
     await new Promise<void>((done) => upstream.close(() => done()));
     if (!directory.startsWith(join(tmpdir(), "pdd-preview-")))
       throw new Error("Unexpected temporary directory");
