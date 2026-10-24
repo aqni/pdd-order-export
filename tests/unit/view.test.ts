@@ -392,6 +392,7 @@ test("cancel preserves a successful detail arriving after the abort", async () =
   expect(signal.aborted).toBe(true);
   resolve({ orderSn: order.order_sn });
   await vi.waitFor(() => expect(exports()?.hidden ?? true).toBe(false));
+  expect(root.querySelector('[aria-label="收集进度"]')).toBeNull();
   expect(
     root.querySelector('[aria-label="收集结果"] .counts')!.textContent,
   ).toBe("已收集 1 笔订单 · 详情 1 笔");

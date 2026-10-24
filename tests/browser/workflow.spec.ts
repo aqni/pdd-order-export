@@ -79,7 +79,7 @@ test("native descriptions preserve control interactions and progress is indeterm
   await expect(json).toBeVisible();
   await expect(
     dialog.getByRole("region", { name: "收集进度", exact: true }),
-  ).toBeVisible();
+  ).toBeHidden();
   await expect(
     dialog.getByRole("region", { name: "收集结果", exact: true }),
   ).toBeVisible();

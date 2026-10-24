@@ -40,11 +40,10 @@ export class CollectControls extends Component<
         <p role="alert" hidden={!message}>
           {message}
         </p>
-        {(active || progress !== null) && (
+        {active && (
           <>
             <hr />
             <CollectProgress
-              active={active}
               cancelling={status === "cancelling"}
               counts={progress}
             />
@@ -144,7 +143,7 @@ export class CollectControls extends Component<
     }
     if (controller !== this.#controller) return;
     this.#controller = null;
-    this.setState({ status: "complete" });
+    this.setState({ status: "complete", progress: null });
     this.props.onFinish({
       entries,
       partial: controller.signal.aborted || progress.pages >= options.maxPages,
