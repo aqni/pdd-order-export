@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { createElement, render } from "preact";
+import { h, render } from "preact";
 import { ExportPanel } from "../../src/ui";
 import stylesheet from "../../src/ui/styles.css?style";
 import { PddClient, PddError, type Order } from "../../src/pdd";
@@ -54,7 +54,7 @@ function createView(): ViewHandle {
   const mount = document.createElement("div");
   const root = element.attachShadow({ mode: "open" });
   root.append(stylesheet.cloneNode(true), mount);
-  render(createElement(ExportPanel, {}), mount);
+  render(h(ExportPanel, {}), mount);
   document.body.append(element);
   const view: ViewHandle = {
     element,
@@ -74,7 +74,7 @@ async function updated() {
 
 function ui(view: ViewHandle) {
   const root = view.element.shadowRoot!;
-  const native = root.querySelector("form")!;
+  const native = root.querySelector<HTMLFormElement>("form[aria-label]")!;
   return {
     root,
     native,
@@ -130,7 +130,7 @@ test("collection preserves settings and requires an explicit export interaction"
   await vi.waitFor(() => expect(exports()?.hidden ?? true).toBe(false));
   expect(files.exportFile).not.toHaveBeenCalled();
   expect(files.downloadFile).not.toHaveBeenCalled();
-  expect(root.querySelector("form")).toBe(native);
+  expect(root.querySelector<HTMLFormElement>("form[aria-label]")).toBe(native);
   expect(input("pageSize").value).toBe("30");
   expect(collection.collectOrders).toHaveBeenCalledOnce();
   action("导出 JSON").click();
@@ -149,7 +149,7 @@ test("collection preserves settings and requires an explicit export interaction"
   expect(files.downloadFile).toHaveBeenCalledOnce();
 });
 
-test("closing stops a pending task and keeps its partial result after reopening", async () => {
+test("hiding preserves a pending task until an explicit stop", async () => {
   let signal!: AbortSignal;
   vi.mocked(PddClient.prototype.getOrders).mockResolvedValueOnce(
     sample.entries.map((e) => e.order),
@@ -166,16 +166,18 @@ test("closing stops a pending task and keeps its partial result after reopening"
     });
   const view = createView();
   const { root, native, action, running, exports } = ui(view);
-  action("导出账单").click();
+  root.querySelector("dialog")!.showModal();
   native.requestSubmit();
   await vi.waitFor(() => expect(running()).toBe(true));
   await vi.waitFor(() =>
     expect(PddClient.prototype.getOrderDetail).toHaveBeenCalledTimes(2),
   );
-  action("停止并关闭").click();
+  root.querySelector("dialog")!.close();
+  expect(signal.aborted).toBe(false);
+  root.querySelector("dialog")!.showModal();
+  action("停止并保留结果").click();
   expect(signal.aborted).toBe(true);
   await vi.waitFor(() => expect(exports()?.hidden ?? true).toBe(false));
-  action("导出账单").click();
   expect(root.querySelector("dialog")!.open).toBe(true);
   expect(action("导出部分 JSON").disabled).toBe(false);
   expect(files.downloadFile).not.toHaveBeenCalled();
@@ -248,7 +250,7 @@ test("busy updates keep native draft nodes and submit their current values", asy
   );
   release();
   await vi.waitFor(() => expect(exports()?.hidden ?? true).toBe(false));
-  expect(root.querySelector("form")).toBe(native);
+  expect(root.querySelector<HTMLFormElement>("form[aria-label]")).toBe(native);
   expect(root.querySelector(".action")).toBe(action);
   expect(action.type).toBe("submit");
   expect(action.textContent).toBe("重新收集");
@@ -344,7 +346,7 @@ test("native drafts and progress nodes survive updates and moving the view", asy
   await vi.waitFor(() => expect(progress.hasAttribute("value")).toBe(false));
   expect(progress.position).toBe(-1);
   expect(root.querySelector("progress")).toBe(progress);
-  expect(root.querySelector("form")).toBe(native);
+  expect(root.querySelector<HTMLFormElement>("form[aria-label]")).toBe(native);
   expect(input("pageSize")).toBe(size);
   expect(size.value).toBe("30");
   finish();

@@ -1,44 +1,184 @@
 import Papa from "papaparse";
 import { test, expect } from "./fixtures";
 
+test("stylesheet scopes stop at child regions and native fields keep form ownership", async ({
+  shop,
+}) => {
+  const { panel, page } = shop;
+  const form = panel.getByRole("form", { name: "收集设置", exact: true });
+  expect(
+    await form.evaluate((element) => {
+      const form = element as HTMLFormElement;
+      return [
+        "startDate",
+        "endDate",
+        "includeDetails",
+        "pageSize",
+        "maxPages",
+      ].every(
+        (name) =>
+          (form.elements.namedItem(name) as HTMLInputElement)?.form === form,
+      );
+    }),
+  ).toBe(true);
+  const start = panel.getByRole("button", { name: "开始收集", exact: true });
+  const close = panel.getByRole("button", { name: "收起", exact: true });
+  const border = await start.evaluate(
+    (element) => getComputedStyle(element).borderTopWidth,
+  );
+  await page.locator("#pdd-order-export").evaluate((host) => {
+    const rules = [...host.shadowRoot!.querySelector("style")!.sheet!.cssRules];
+    const dialog = rules.find(
+      (rule) =>
+        rule instanceof CSSScopeRule && rule.start?.includes('"dialog"'),
+    ) as CSSScopeRule;
+    if (!dialog) throw new Error("Missing dialog style scope");
+    dialog.insertRule("button { border: 13px solid red !important; }");
+  });
+  expect(
+    await close.evaluate((element) => getComputedStyle(element).borderTopWidth),
+  ).toBe("13px");
+  expect(
+    await start.evaluate((element) => getComputedStyle(element).borderTopWidth),
+  ).toBe(border);
+  await expect(
+    panel.getByText("日期留空表示不限。", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await start.evaluate((element) =>
+      (element as HTMLButtonElement).form?.getAttribute("aria-label"),
+    ),
+  ).toBe("收集设置");
+});
+
+test("the launcher drags without opening, stays in the viewport and remains keyboard accessible", async ({
+  shop,
+}) => {
+  const { page } = shop;
+  await shop.panel.getByRole("button", { name: "收起", exact: true }).click();
+  const launcher = page.getByRole("button", { name: "导出账单", exact: true });
+  const initial = (await launcher.boundingBox())!;
+  await page.mouse.move(
+    initial.x + initial.width / 2,
+    initial.y + initial.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(200, 180, { steps: 5 });
+  await page.mouse.up();
+  await expect(shop.dialog).toBeHidden();
+  const moved = (await launcher.boundingBox())!;
+  expect(moved.x).toBeCloseTo(200 - initial.width / 2, 0);
+  expect(moved.y).toBeCloseTo(180 - initial.height / 2, 0);
+
+  await launcher.click();
+  await expect(shop.dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(launcher).toBeFocused();
+  expect(await launcher.boundingBox()).toEqual(moved);
+
+  await page.mouse.move(moved.x + moved.width / 2, moved.y + moved.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(1260, 700, { steps: 5 });
+  await page.mouse.up();
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect
+    .poll(async () => {
+      const bounds = (await launcher.boundingBox())!;
+      return (
+        bounds.x >= 0 &&
+        bounds.y >= 0 &&
+        bounds.x + bounds.width <= 320 &&
+        bounds.y + bounds.height <= 568
+      );
+    })
+    .toBe(true);
+  await expect(shop.dialog).toBeHidden();
+  await launcher.focus();
+  await page.keyboard.press("Enter");
+  await expect(shop.dialog).toBeVisible();
+});
+
+test("the launcher also supports native touch dragging and tapping", async ({
+  shop,
+}) => {
+  const { page, context } = shop;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await shop.panel.getByRole("button", { name: "收起", exact: true }).click();
+  const launcher = page.getByRole("button", { name: "导出账单", exact: true });
+  const bounds = (await launcher.boundingBox())!;
+  const session = await context.newCDPSession(page);
+  try {
+    // 完整手势避免瞬间跨越整屏触发浏览器的 fling/tap 抑制。
+    await session.send("Input.synthesizeScrollGesture", {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2,
+      xDistance: 140 - (bounds.x + bounds.width / 2),
+      yDistance: 160 - (bounds.y + bounds.height / 2),
+      gestureSourceType: "touch",
+      speed: 800,
+      preventFling: true,
+    });
+    await expect(shop.dialog).toBeHidden();
+    await expect
+      .poll(async () => (await launcher.boundingBox())!.x)
+      .toBeLessThan(bounds.x - 100);
+    const moved = (await launcher.boundingBox())!;
+    expect(moved.y).toBeLessThan(bounds.y - 300);
+    expect(moved.x).toBeGreaterThanOrEqual(0);
+    expect(moved.y).toBeGreaterThanOrEqual(0);
+    await page.touchscreen.tap(
+      moved.x + moved.width / 2,
+      moved.y + moved.height / 2,
+    );
+    await expect(shop.dialog).toBeVisible();
+  } finally {
+    await session.detach();
+  }
+});
+
 test("panel dimensions stay compact when the site uses a large root font", async ({
   shop,
 }) => {
-  const { page, dialog } = shop;
+  const { page } = shop;
   expect(
-    await dialog.evaluate((element) => {
+    await shop.dialog.evaluate((element) => {
       const styles = (element.getRootNode() as ShadowRoot).querySelectorAll(
         "style",
       );
       return {
-        count: styles.length,
-        hasRules: Boolean(styles[0]?.sheet?.cssRules.length),
+        hasRules:
+          [...styles].some((style) => Boolean(style.sheet?.cssRules.length)) ||
+          (element.getRootNode() as ShadowRoot).adoptedStyleSheets.some(
+            (sheet) => sheet.cssRules.length > 0,
+          ),
       };
     }),
-  ).toEqual({ count: 1, hasRules: true });
+  ).toEqual({ hasRules: true });
   await page.setViewportSize({ width: 1900, height: 900 });
-  const normalWidth = (await dialog.boundingBox())!.width;
+  const normalWidth = (await shop.dialog.boundingBox())!.width;
   await page.addStyleTag({
     content:
       ":root { font-size: 100px !important; } #pdd-order-export { font-family: serif !important; }",
   });
   expect(
-    await dialog.evaluate((element) => getComputedStyle(element).fontFamily),
+    await shop.dialog.evaluate(
+      (element) => getComputedStyle(element).fontFamily,
+    ),
   ).toContain("system-ui");
   await expect
-    .poll(async () => (await dialog.boundingBox())!.width)
+    .poll(async () => (await shop.dialog.boundingBox())!.width)
     .toBeCloseTo(normalWidth, 0);
   await page.screenshot({ path: test.info().outputPath("desktop.png") });
-  await dialog.getByText("请求设置", { exact: true }).click();
+  await shop.panel.getByText("请求设置", { exact: true }).click();
   await page.mouse.move(0, 0);
   await page.screenshot({ path: test.info().outputPath("expanded.png") });
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 568 });
-    const bounds = (await dialog.boundingBox())!;
+    const bounds = (await shop.dialog.boundingBox())!;
     expect(bounds.width).toBeLessThanOrEqual(width - 24);
     expect(Math.abs(bounds.x - (width - bounds.width) / 2)).toBeLessThan(2);
     expect(
-      await dialog.evaluate(
+      await shop.dialog.evaluate(
         (element) => element.scrollWidth <= element.clientWidth,
       ),
     ).toBe(true);
@@ -49,134 +189,145 @@ test("panel dimensions stay compact when the site uses a large root font", async
 test("native descriptions preserve control interactions and page progress starts at zero", async ({
   shop,
 }) => {
-  const { page, dialog, fixture, release } = shop;
-  const details = dialog.getByRole("checkbox", { name: "收集详情" });
+  const { page, fixture, release } = shop;
+  const details = shop.panel.getByRole("checkbox", { name: "收集详情" });
   await expect(details.locator("..")).toHaveAttribute(
     "title",
     /收集时间会更长/,
   );
-  await dialog.getByText("收集详情", { exact: true }).click();
+  await shop.panel.getByText("收集详情", { exact: true }).click();
   await expect(details).not.toBeChecked();
   await details.focus();
   await page.keyboard.press("Space");
   await expect(details).toBeChecked();
-  await dialog.getByText("请求设置", { exact: true }).click();
+  await shop.panel.getByText("请求设置", { exact: true }).click();
   await expect(
-    dialog.getByLabel("最多读取页数", { exact: true }).locator(".."),
+    shop.panel.getByLabel("最多读取页数", { exact: true }).locator(".."),
   ).toHaveAttribute("title", /页数上限/);
   fixture.holdDetails = true;
-  await dialog.getByRole("button", { name: "开始收集", exact: true }).focus();
+  await shop.panel
+    .getByRole("button", { name: "开始收集", exact: true })
+    .focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => fixture.requests.length).toBe(2);
-  await expect(dialog.getByRole("progressbar")).toHaveAttribute("value", "0");
-  await expect(dialog.getByRole("progressbar")).toHaveAttribute("max", "2");
-  await expect(dialog.getByRole("heading", { name: "收集进度" })).toBeVisible();
+  await expect(shop.panel.getByRole("progressbar")).toHaveAttribute(
+    "value",
+    "0",
+  );
+  await expect(shop.panel.getByRole("progressbar")).toHaveAttribute("max", "2");
+  await expect(
+    shop.panel.getByRole("heading", { name: "收集进度" }),
+  ).toBeVisible();
   fixture.holdDetails = false;
   release();
-  const json = dialog.getByRole("button", {
+  const json = shop.panel.getByRole("button", {
     name: "导出 JSON",
     exact: true,
   });
   await expect(json).toBeVisible();
   await expect(
-    dialog.getByRole("region", { name: "收集进度", exact: true }),
+    shop.panel.getByRole("region", { name: "收集进度", exact: true }),
   ).toBeHidden();
   await expect(
-    dialog.getByRole("region", { name: "收集结果", exact: true }),
+    shop.panel.getByRole("region", { name: "收集结果", exact: true }),
   ).toBeVisible();
-  await expect(dialog.getByRole("progressbar")).toHaveCount(0);
+  await expect(shop.panel.getByRole("progressbar")).toHaveCount(0);
   await expect(json).toHaveAttribute(
     "title",
     /订单与详情数据。\n\n.*个人信息.*精度损失/,
   );
   await expect(
-    dialog.getByRole("button", { name: "导出 CSV", exact: true }),
+    shop.panel.getByRole("button", { name: "导出 CSV", exact: true }),
   ).toHaveAttribute("title", /未扣除退款。\n\n.*设为文本/);
   await expect(json).toBeEnabled();
   await json.focus();
   await expect(json).toBeFocused();
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "关闭", exact: true }).focus();
+  await expect(shop.dialog).toBeVisible();
+  await shop.panel.getByRole("button", { name: "收起", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await expect(dialog).toBeHidden();
+  await expect(shop.dialog).toBeHidden();
 });
 
 test("starting collection from a focused field moves focus to the stop button", async ({
   shop,
 }) => {
-  const { dialog, fixture } = shop;
+  const { fixture } = shop;
   fixture.holdDetails = true;
-  await dialog.getByText("请求设置", { exact: true }).click();
-  await dialog.getByLabel("每页订单数", { exact: true }).focus();
-  await dialog
-    .locator("form")
+  await shop.panel.getByText("请求设置", { exact: true }).click();
+  await shop.panel.getByLabel("每页订单数", { exact: true }).focus();
+  await shop.panel
+    .getByRole("form", { name: "收集设置", exact: true })
     .evaluate((form) => (form as HTMLFormElement).requestSubmit());
-  const stop = dialog.getByRole("button", {
+  const stop = shop.panel.getByRole("button", {
     name: "停止并保留结果",
     exact: true,
   });
   await expect(stop).toBeFocused();
-  await expect(dialog.locator(".settings")).not.toHaveAttribute("open");
+  await expect(shop.panel.locator(".settings")).not.toHaveAttribute("open");
   await stop.click();
 });
 
 test("installed userscript collects first and exports only on request", async ({
   shop,
 }) => {
-  const { page, dialog, fixture, downloads, file } = shop;
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(dialog.getByRole("region", { name: "收集结果" })).toBeHidden();
-  await expect(dialog.getByLabel("开始日期")).toHaveValue("");
-  await expect(dialog.getByLabel("结束日期")).toHaveValue("");
-  await expect(dialog.getByLabel("每页订单数")).toHaveValue("20");
+  const { page, fixture, downloads, file } = shop;
   await expect(
-    dialog.getByRole("button", { name: "不限日期", exact: true }),
+    shop.panel.getByRole("region", { name: "收集结果" }),
+  ).toBeHidden();
+  await expect(shop.panel.getByLabel("开始日期")).toHaveValue("");
+  await expect(shop.panel.getByLabel("结束日期")).toHaveValue("");
+  await expect(shop.panel.getByLabel("每页订单数")).toHaveValue("20");
+  await expect(
+    shop.panel.getByRole("button", { name: "不限日期", exact: true }),
   ).toHaveCount(0);
-  await expect(
-    dialog.locator(".date-placeholder").filter({ visible: true }),
-  ).toHaveCount(2);
+  await expect(shop.panel.getByLabel("开始日期")).toHaveAccessibleDescription(
+    "日期留空表示不限。",
+  );
+  await expect(shop.panel.getByLabel("结束日期")).toHaveAccessibleDescription(
+    "日期留空表示不限。",
+  );
   expect(
-    await dialog.evaluate((element) => {
-      const root = element.getRootNode() as ShadowRoot;
-      return {
-        launcher: getComputedStyle(root.querySelector(".launcher")!).position,
-        native: element instanceof HTMLDialogElement,
-      };
-    }),
-  ).toEqual({ launcher: "fixed", native: true });
+    await shop.dialog.evaluate(
+      (element) => element instanceof HTMLDialogElement,
+    ),
+  ).toBe(true);
   expect(
-    await dialog.evaluate((element) => {
+    await shop.dialog.evaluate((element) => {
       return element.scrollWidth <= element.clientWidth;
     }),
   ).toBe(true);
   await page.screenshot({ path: test.info().outputPath("panel.png") });
-  await dialog.getByRole("button", { name: "关闭", exact: true }).click();
-  await expect(dialog).not.toBeVisible();
+  await shop.panel.getByRole("button", { name: "收起", exact: true }).click();
+  await expect(shop.dialog).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "导出账单", exact: true }),
   ).toBeEnabled();
   await page.screenshot({ path: test.info().outputPath("launcher.png") });
   await page.getByRole("button", { name: "导出账单", exact: true }).click();
-  await dialog.getByRole("button", { name: "开始收集" }).click();
+  await shop.panel.getByRole("button", { name: "开始收集" }).click();
   await expect
     .poll(() =>
-      dialog.getByRole("button", { name: "导出 CSV", exact: true }).isEnabled(),
+      shop.panel
+        .getByRole("button", { name: "导出 CSV", exact: true })
+        .isEnabled(),
     )
     .toBe(true);
   expect(downloads).toHaveLength(0);
   const requestCount = fixture.requests.length;
   await expect(
-    dialog.getByRole("button", { name: "重新收集", exact: true }),
+    shop.panel.getByRole("button", { name: "重新收集", exact: true }),
   ).toBeVisible();
-  await expect(dialog.getByLabel("开始日期")).toBeHidden();
-  await dialog.getByText("收集设置", { exact: true }).click();
-  await dialog.getByLabel("开始日期").fill("2026-10-17");
+  await expect(shop.panel.getByLabel("开始日期")).toBeHidden();
+  await shop.panel.getByText("收集设置", { exact: true }).click();
+  await shop.panel.getByLabel("开始日期").fill("2026-10-17");
   await expect(
-    dialog.getByText("结果日期：不限 至 不限", { exact: true }),
+    shop.panel.getByText("结果日期：不限 至 不限", { exact: true }),
   ).toBeVisible();
   expect(fixture.requests).toHaveLength(requestCount);
   const csvDownload = page.waitForEvent("download");
-  await dialog.getByRole("button", { name: "导出 CSV", exact: true }).click();
+  await shop.panel
+    .getByRole("button", { name: "导出 CSV", exact: true })
+    .click();
   const csv = await file(await csvDownload);
   expect([...csv.bytes.subarray(0, 3)]).toEqual([239, 187, 191]);
   expect(csv.name).toBe("拼多多账单_不限至不限.csv");
@@ -188,7 +339,9 @@ test("installed userscript collects first and exports only on request", async ({
     fixture.orders.map((order) => order.order_sn),
   );
   const jsonDownload = page.waitForEvent("download");
-  await dialog.getByRole("button", { name: "导出 JSON", exact: true }).click();
+  await shop.panel
+    .getByRole("button", { name: "导出 JSON", exact: true })
+    .click();
   const jsonFile = await file(await jsonDownload);
   expect(jsonFile.name).toBe(csv.name.replace(/\.csv$/, ".json"));
   expect(downloads).toHaveLength(2);
@@ -208,49 +361,53 @@ test("installed userscript collects first and exports only on request", async ({
 test("recollection validates drafts before replacing the result and keeps the new partial range", async ({
   shop,
 }) => {
-  const { page, dialog, fixture, downloads, file } = shop;
-  await dialog.getByRole("button", { name: "开始收集" }).click();
+  const { page, fixture, downloads, file } = shop;
+  await shop.panel.getByRole("button", { name: "开始收集" }).click();
   await expect(
-    dialog.getByRole("button", { name: "导出 JSON", exact: true }),
+    shop.panel.getByRole("button", { name: "导出 JSON", exact: true }),
   ).toBeVisible();
   const previousRequests = fixture.requests.length;
-  await dialog.getByText("收集设置", { exact: true }).click();
-  await dialog.getByText("请求设置", { exact: true }).click();
-  await dialog.getByLabel("每页订单数").fill("0");
-  await dialog.getByText("请求设置", { exact: true }).click();
-  await dialog.getByText("收集设置", { exact: true }).click();
-  await dialog.getByRole("button", { name: "重新收集", exact: true }).click();
-  await expect(dialog.getByLabel("每页订单数")).toBeVisible();
-  await expect(dialog.getByLabel("每页订单数")).toBeFocused();
+  await shop.panel.getByText("收集设置", { exact: true }).click();
+  await shop.panel.getByText("请求设置", { exact: true }).click();
+  await shop.panel.getByLabel("每页订单数").fill("0");
+  await shop.panel.getByText("请求设置", { exact: true }).click();
+  await shop.panel.getByText("收集设置", { exact: true }).click();
+  await shop.panel
+    .getByRole("button", { name: "重新收集", exact: true })
+    .click();
+  await expect(shop.panel.getByLabel("每页订单数")).toBeVisible();
+  await expect(shop.panel.getByLabel("每页订单数")).toBeFocused();
   expect(fixture.requests).toHaveLength(previousRequests);
   await expect(
-    dialog.getByRole("button", { name: "导出 JSON", exact: true }),
+    shop.panel.getByRole("button", { name: "导出 JSON", exact: true }),
   ).toBeVisible();
-  await dialog.getByLabel("每页订单数").fill("20");
-  await dialog.getByLabel("开始日期").fill("2026-10-17");
-  await dialog.getByLabel("结束日期").fill("2026-10-17");
+  await shop.panel.getByLabel("每页订单数").fill("20");
+  await shop.panel.getByLabel("开始日期").fill("2026-10-17");
+  await shop.panel.getByLabel("结束日期").fill("2026-10-17");
   fixture.holdDetails = true;
   fixture.allowDetails = 1;
-  await dialog.getByRole("button", { name: "重新收集", exact: true }).click();
+  await shop.panel
+    .getByRole("button", { name: "重新收集", exact: true })
+    .click();
   await expect.poll(() => fixture.requests.length).toBe(previousRequests + 3);
   await expect(
-    dialog.getByRole("button", { name: "导出 JSON", exact: true }),
+    shop.panel.getByRole("button", { name: "导出 JSON", exact: true }),
   ).toBeHidden();
   await expect(
-    dialog.getByRole("button", { name: "停止并关闭", exact: true }),
+    shop.panel.getByRole("button", { name: "收起", exact: true }),
   ).toBeVisible();
-  await dialog
+  await shop.panel
     .getByRole("button", { name: "停止并保留结果", exact: true })
     .click();
   await expect(
-    dialog.getByRole("button", { name: "导出部分 JSON", exact: true }),
+    shop.panel.getByRole("button", { name: "导出部分 JSON", exact: true }),
   ).toBeVisible();
   await expect(
-    dialog.getByText("结果日期：2026-10-17 至 2026-10-17", { exact: true }),
+    shop.panel.getByText("结果日期：2026-10-17 至 2026-10-17", { exact: true }),
   ).toBeVisible();
   expect(downloads).toHaveLength(0);
   const download = page.waitForEvent("download");
-  await dialog
+  await shop.panel
     .getByRole("button", { name: "导出部分 JSON", exact: true })
     .click();
   const exportedFile = await file(await download);
@@ -261,31 +418,43 @@ test("recollection validates drafts before replacing the result and keeps the ne
   expect(Array.isArray(exported)).toBe(true);
   await page.setViewportSize({ width: 320, height: 568 });
   expect(
-    await dialog.evaluate(
+    await shop.dialog.evaluate(
       (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
   await page.screenshot({ path: test.info().outputPath("small-result.png") });
 });
 
-test("closing cancels a blocked detail and reopening retains already yielded orders", async ({
+test("hiding preserves a blocked task and reopening allows an explicit stop", async ({
   shop,
 }) => {
-  const { page, dialog, fixture, downloads, file, release } = shop;
+  const { page, fixture, downloads, file, release } = shop;
   fixture.holdDetails = true;
   fixture.allowDetails = 1;
-  await dialog.getByRole("button", { name: "开始收集" }).click();
+  await shop.panel.getByRole("button", { name: "开始收集" }).click();
   await expect.poll(() => fixture.requests.length).toBe(3);
-  await expect(dialog.getByRole("progressbar")).toHaveAttribute("value", "1");
-  await expect(dialog.getByRole("progressbar")).toHaveAttribute("max", "2");
+  await expect(shop.panel.getByRole("progressbar")).toHaveAttribute(
+    "value",
+    "1",
+  );
+  await expect(shop.panel.getByRole("progressbar")).toHaveAttribute("max", "2");
   expect(
-    await dialog
+    await shop.panel
       .getByRole("progressbar")
       .evaluate((element) => (element as HTMLProgressElement).position),
   ).toBe(0.5);
-  await dialog.getByRole("button", { name: "停止并关闭", exact: true }).click();
+  await shop.panel.getByRole("button", { name: "收起", exact: true }).click();
+  await expect(shop.dialog).toBeHidden();
   await page.getByRole("button", { name: "导出账单", exact: true }).click();
-  const exportJson = dialog.getByRole("button", {
+  await expect(shop.panel.getByRole("progressbar")).toHaveAttribute(
+    "value",
+    "1",
+  );
+  await expect(shop.panel.getByLabel("每页订单数")).toBeDisabled();
+  await shop.panel
+    .getByRole("button", { name: "停止并保留结果", exact: true })
+    .click();
+  const exportJson = shop.panel.getByRole("button", {
     name: "导出部分 JSON",
   });
   await expect(exportJson).toBeEnabled();
@@ -303,47 +472,56 @@ test("closing cancels a blocked detail and reopening retains already yielded ord
   expect(
     json.every((entry: { detail: unknown }) => entry.detail !== null),
   ).toBe(true);
-  await expect(dialog.getByLabel("开始日期")).toBeHidden();
+  await expect(shop.panel.getByLabel("开始日期")).toBeHidden();
   await page.screenshot({ path: test.info().outputPath("export.png") });
-  await dialog.getByText("收集设置", { exact: true }).click();
-  await expect(dialog.getByLabel("开始日期")).toBeVisible();
+  await shop.panel.getByText("收集设置", { exact: true }).click();
+  await expect(shop.panel.getByLabel("开始日期")).toBeVisible();
   expect(fixture.requests).toHaveLength(3);
 });
 
-test("Escape stops collection while the same settings draft survives reopening", async ({
+test("Escape hides the dialog while collection completes and drafts survive reopening", async ({
   shop,
 }) => {
-  const { page, dialog, fixture } = shop;
+  const { page, fixture, release } = shop;
   fixture.holdDetails = true;
   fixture.allowDetails = 1;
   fixture.pageSize = 30;
-  await dialog.getByText("请求设置", { exact: true }).click();
-  await dialog.getByLabel("每页订单数").fill("30");
-  await dialog.getByRole("button", { name: "开始收集" }).click();
+  await shop.panel.getByText("请求设置", { exact: true }).click();
+  await shop.panel.getByLabel("每页订单数").fill("30");
+  await shop.panel.getByRole("button", { name: "开始收集" }).click();
   await expect.poll(() => fixture.requests.length).toBe(3);
-  await expect(dialog.getByLabel("开始日期")).toBeHidden();
-  await expect(dialog.getByRole("progressbar")).toBeVisible();
+  await expect(shop.panel.getByLabel("开始日期")).toBeHidden();
+  await expect(shop.panel.getByRole("progressbar")).toBeVisible();
   await expect(
-    dialog.getByRole("button", { name: "停止并保留结果" }),
+    shop.panel.getByRole("button", { name: "停止并保留结果" }),
   ).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("collecting.png") });
-  await expect(dialog.getByLabel("每页订单数")).toBeDisabled();
+  await expect(shop.panel.getByLabel("每页订单数")).toBeDisabled();
   await page.keyboard.press("Escape");
-  await expect(dialog).not.toBeVisible();
+  await expect(shop.dialog).not.toBeVisible();
+  release();
+  await expect(
+    shop.panel.getByRole("button", {
+      name: "导出 JSON",
+      exact: true,
+      includeHidden: true,
+    }),
+  ).toHaveCount(1);
+  await expect(shop.dialog).toBeHidden();
   await page.getByRole("button", { name: "导出账单", exact: true }).click();
   await expect(
-    dialog.getByRole("button", { name: "导出部分 JSON" }),
+    shop.panel.getByRole("button", { name: "导出 JSON", exact: true }),
   ).toBeEnabled();
-  await dialog.getByText("收集设置", { exact: true }).click();
-  await expect(dialog.getByLabel("每页订单数")).toHaveValue("30");
-  await expect(dialog.getByLabel("开始日期")).toBeEnabled();
-  expect(fixture.requests).toHaveLength(3);
+  await shop.panel.getByText("收集设置", { exact: true }).click();
+  await expect(shop.panel.getByLabel("每页订单数")).toHaveValue("30");
+  await expect(shop.panel.getByLabel("开始日期")).toBeEnabled();
+  expect(fixture.requests).toHaveLength(4);
 });
 
 test("Native fields validate and remain isolated from site styles", async ({
   shop,
 }) => {
-  const { page, dialog, fixture } = shop;
+  const { page, fixture } = shop;
   const before = await page.evaluate(() => ({
     styles: document.head.querySelectorAll("style").length,
     font: getComputedStyle(document.documentElement).fontSize,
@@ -352,42 +530,48 @@ test("Native fields validate and remain isolated from site styles", async ({
     content:
       "input, button { font-size: 70px !important; display: none !important; }",
   });
-  await expect(dialog.getByRole("button", { name: "开始收集" })).toBeVisible();
+  await expect(
+    shop.panel.getByRole("button", { name: "开始收集" }),
+  ).toBeVisible();
   expect(
-    await dialog
+    await shop.panel
       .getByLabel("开始日期")
       .evaluate((input) => getComputedStyle(input).fontSize),
   ).not.toBe("70px");
-  await dialog.getByText("请求设置", { exact: true }).click();
-  const size = dialog.getByLabel("每页订单数");
+  await shop.panel.getByText("请求设置", { exact: true }).click();
+  const size = shop.panel.getByLabel("每页订单数");
   await size.fill("0");
-  await dialog.getByRole("button", { name: "开始收集" }).click();
+  await shop.panel.getByText("请求设置", { exact: true }).click();
+  await shop.panel.getByText("收集设置", { exact: true }).click();
+  await shop.panel.getByRole("button", { name: "开始收集" }).click();
+  await expect(size).toBeFocused();
+  await expect(size).toBeVisible();
   expect(
     await size.evaluate((input) => (input as HTMLInputElement).checkValidity()),
   ).toBe(false);
   expect(fixture.requests).toHaveLength(0);
   await size.fill("20");
-  await dialog.getByLabel("开始日期").fill("2026-10-18");
-  await dialog.getByLabel("结束日期").fill("2026-10-17");
-  await dialog.getByRole("button", { name: "开始收集" }).click();
+  await shop.panel.getByLabel("开始日期").fill("2026-10-18");
+  await shop.panel.getByLabel("结束日期").fill("2026-10-17");
+  await shop.panel.getByRole("button", { name: "开始收集" }).click();
   expect(fixture.requests).toHaveLength(0);
-  await dialog.getByLabel("开始日期").fill("");
-  await dialog.getByLabel("结束日期").fill("");
-  await expect(dialog.getByRole("checkbox")).toBeChecked();
-  await dialog.getByText("收集详情", { exact: true }).click();
-  await expect(dialog.getByRole("checkbox")).not.toBeChecked();
-  await dialog.getByLabel("每页订单数").press("Enter");
+  await shop.panel.getByLabel("开始日期").fill("");
+  await shop.panel.getByLabel("结束日期").fill("");
+  await expect(shop.panel.getByRole("checkbox")).toBeChecked();
+  await shop.panel.getByText("收集详情", { exact: true }).click();
+  await expect(shop.panel.getByRole("checkbox")).not.toBeChecked();
+  await shop.panel.getByLabel("每页订单数").press("Enter");
   await expect(
-    dialog.getByRole("button", { name: "导出 JSON", exact: true }),
+    shop.panel.getByRole("button", { name: "导出 JSON", exact: true }),
   ).toBeEnabled();
   await expect(
-    dialog.getByRole("button", { name: "重新收集", exact: true }),
+    shop.panel.getByRole("button", { name: "重新收集", exact: true }),
   ).toBeFocused();
   expect(
     fixture.requests.every((request) => request.path.includes("order_list")),
   ).toBe(true);
-  await dialog.getByRole("button", { name: "关闭", exact: true }).click();
-  await expect(dialog).not.toBeVisible();
+  await shop.panel.getByRole("button", { name: "收起", exact: true }).click();
+  await expect(shop.dialog).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "导出账单", exact: true }),
   ).toBeFocused();
@@ -402,10 +586,10 @@ test("Native fields validate and remain isolated from site styles", async ({
 test("CSV failure explains the JSON fallback and keeps the collected data", async ({
   shop,
 }) => {
-  const { page, dialog, fixture, downloads, file } = shop;
+  const { page, fixture, downloads, file } = shop;
   fixture.orders[0]!.order_amount = -1;
-  await dialog.getByRole("button", { name: "开始收集" }).click();
-  const csv = dialog.getByRole("button", { name: "导出 CSV", exact: true });
+  await shop.panel.getByRole("button", { name: "开始收集" }).click();
+  const csv = shop.panel.getByRole("button", { name: "导出 CSV", exact: true });
   await expect(csv).toBeEnabled();
   const warning = page.waitForEvent("dialog");
   const clicked = csv.click();
@@ -415,7 +599,10 @@ test("CSV failure explains the JSON fallback and keeps the collected data", asyn
   await alert.accept();
   await clicked;
   expect(downloads).toHaveLength(0);
-  const json = dialog.getByRole("button", { name: "导出 JSON", exact: true });
+  const json = shop.panel.getByRole("button", {
+    name: "导出 JSON",
+    exact: true,
+  });
   await expect(json).toBeEnabled();
   const download = page.waitForEvent("download");
   await json.click();
@@ -423,27 +610,27 @@ test("CSV failure explains the JSON fallback and keeps the collected data", asyn
   expect(exported.map((entry: { order: unknown }) => entry.order)).toEqual(
     fixture.orders,
   );
-  await expect(dialog.getByRole("status")).toHaveText("收集完成。");
+  await expect(shop.panel.getByRole("status")).toHaveText("收集完成。");
 });
 
 test("denied detail access shows a login hint without partial exports", async ({
   shop,
 }) => {
-  const { page, dialog, downloads } = shop;
+  const { page, downloads } = shop;
   await page.route("**/order.html?*", (route) =>
     route.fulfill({
       status: 403,
       body: "Internal response details must not appear in the UI",
     }),
   );
-  await dialog.getByRole("button", { name: "开始收集" }).click();
-  await expect(dialog.getByRole("alert")).toHaveText(
+  await shop.panel.getByRole("button", { name: "开始收集" }).click();
+  await expect(shop.panel.getByRole("alert")).toHaveText(
     "登录已失效或访问被拒绝，请在当前页面重新登录。",
   );
   await expect(
-    dialog.getByRole("button", { name: "开始收集", exact: true }),
+    shop.panel.getByRole("button", { name: "开始收集", exact: true }),
   ).toBeEnabled();
-  await expect(dialog).not.toContainText("Internal response details");
+  await expect(shop.dialog).not.toContainText("Internal response details");
   expect(downloads).toHaveLength(0);
-  await expect(dialog.getByRole("button", { name: /JSON/ })).toHaveCount(0);
+  await expect(shop.panel.getByRole("button", { name: /JSON/ })).toHaveCount(0);
 });

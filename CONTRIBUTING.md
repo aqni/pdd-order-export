@@ -2,7 +2,7 @@
 
 ## 开发
 
-使用 Node.js 24 系列，以及 Chrome／Edge 131+。构建版本由 Git 推导，克隆时保留完整历史和 tags。
+使用 Node.js 24 系列，以及 Chrome／Edge 136+。TypeScript 使用 ES2025 标准库，Vite 按 `chrome136` 构建，不提供旧浏览器兼容层。构建版本由 Git 推导，克隆时保留完整历史和 tags。
 
 ```sh
 npm ci
@@ -20,13 +20,13 @@ npm run preview
 
 产物位于 `dist/`，不压缩并经过排版，不提交到仓库。运行时依赖通过 `vite.config.ts` 的 `externalGlobals` 加载固定版本的官方浏览器产物。安装依赖时保留可选依赖，不使用 `--omit=optional`。
 
-面板使用 Preact 和 TSX，运行时从固定版本的 npm CDN 地址加载官方 UMD 文件。`src/ui/` 中每个组件独立成文件，目录统一按动作命名：`collect/` 存放收集设置、操作和实时进度，`export/` 负责完成后的结果展示及文件导出。`ui/index.tsx` 是 UI 入口和任务协调组件，`ui/dialog.tsx` 管理整个面板的弹层交互，公共样式保存在 `ui/styles.css`。
+面板使用 Preact 和 TSX。`src/ui/` 按职责划分为 `collect/`、`export/`、`dialog/`，各区域通过 `index.ts` 暴露接口；表单内部组件位于 `collect/form/`。收集区域管理任务、取消与进度，表单字段保存草稿，导出区域持有结果快照，入口只连接区域接口。
 
-`main.ts` 负责挂载；UI 入口只保存 `phase` 和结果快照。阶段为 `idle`、`collecting`、`exporting`，其中 `exporting` 表示收集已结束、可导出的阶段。`CollectControls` 拥有表单、收集任务、取消控制器、进度和错误；`cancelling` 只在组件内部管理，关闭面板时调用其 `cancel()`。组件只通知宿主开始和结束，不向上汇报逐页进度；结束结果为 `null` 时表示失败，错误留在收集区域。`CollectProgress` 位于收集控件内部，只在收集和等待取消期间显示；结束后隐藏整个进度区。`ExportControls` 与收集控件平行，仅在收集结束后显示，接收包含条目、日期边界和完整性标记的结果快照。两个区域使用原生 `hr` 分隔。
+`main.ts` 将面板和独立的 `ui/styles.css` 挂载到 Shadow Root，隔离站点样式。样式按组件区域组织，用 `@scope` 限制选择器范围；原生字段和操作按钮共用一个表单树，保留浏览器的约束校验、回车提交和焦点行为。以桌面布局为主，窄屏只做基本防溢出。
 
-弹层组件拥有触发按钮、打开和关闭逻辑、关闭后的焦点恢复，每次关闭只通知一次宿主。操作按钮通过原生 `form` 属性关联表单；表单组合日期范围、详情开关和请求设置，只负责校验与提交。日期输入封装空值提示，日期范围负责跨字段校验。导出组件内部处理文件操作，失败时通过原生 `alert` 提示，成功时由浏览器下载列表反馈。补充说明使用原生 `title`，多项说明以完整句子分段组织。UI 组件统一使用 `Collect…` 和 `Export…` 命名。
+优先使用原生控件。弹层通过 `command="show-modal"` 打开，通过 `<form method="dialog">` 或 Esc 收起；收起不停止任务。文件操作由下载组件处理，失败使用原生 `alert`，补充说明使用 `title`。
 
-JSX 编译为 `createElement` 调用。构建保留许可证和 JSDoc，移除优化注解，再由 Prettier 排版。
+JSX 编译为 Preact 的 `h` 调用。构建保留许可证和 JSDoc，移除优化注解，再由 Prettier 排版。
 
 ### 本地反向代理
 

@@ -22,7 +22,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
       include: ["papaparse", "acorn", "wretch", "typia", "preact"],
     },
     build: {
-      target: "es2022",
+      target: "chrome136",
       minify: false,
       cssMinify: false,
       rolldownOptions: {

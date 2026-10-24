@@ -1,168 +1,136 @@
-import { Component, Fragment, createRef, createElement } from "preact";
+import { Component, h } from "preact";
 import { PddClient, PddError } from "../../pdd";
 import { collectOrders, type CollectedOrder } from "../../collect";
-import { CollectForm } from "./form";
-import { CollectAction } from "./action";
-import { CollectProgress, type CollectCounts } from "./progress";
+import { CollectForm, type CollectOptions, type CollectStatus } from "./form";
+import { CollectFeedback } from "./feedback";
+import type { CollectCounts } from "./progress";
 
-/** 拥有收集任务、取消、进度和控件交互，向宿主通知开始及最终结果。 */
+/** 收集区域拥有任务、取消和进度，只向外交付结果快照。 */
 export class CollectControls extends Component<
-  CollectControlsProps,
-  CollectControlsState
+  {
+    onStart: () => void;
+    onFinish: (result: CollectResult | null) => void;
+  },
+  CollectionState
 > {
-  state: CollectControlsState = { status: "idle", progress: null, error: null };
-  readonly #formId = `pdd-collect-${crypto.randomUUID()}`;
-  readonly #action = createRef<HTMLButtonElement>();
+  state: CollectionState = { status: "idle", progress: null, error: null };
   #controller: AbortController | null = null;
   #disposed = false;
 
-  render(
-    _props: CollectControlsProps,
-    { status, progress, error }: CollectControlsState,
-  ) {
-    const active = status === "collecting" || status === "cancelling";
-    const message = error === null ? "" : describeError(error);
+  render() {
     return (
-      <>
+      <div data-ui="collect">
         <CollectForm
-          id={this.#formId}
-          disabled={active}
-          onCollect={this.#startCollect}
+          status={this.state.status}
+          onCollect={this.#collect}
+          onCancel={this.#cancel}
         />
-        <CollectAction
-          form={this.#formId}
-          buttonRef={this.#action}
-          running={active}
-          cancelling={status === "cancelling"}
-          hasResult={status === "complete"}
-          onCancel={this.cancel}
-        />
-        <p role="alert" hidden={!message}>
-          {message}
-        </p>
-        {active && (
-          <>
-            <hr />
-            <CollectProgress
-              cancelling={status === "cancelling"}
-              counts={progress}
-            />
-          </>
-        )}
-      </>
+        <CollectFeedback {...this.state} />
+      </div>
     );
   }
-
-  getSnapshotBeforeUpdate(
-    _props: CollectControlsProps,
-    previous: CollectControlsState,
-  ): boolean | null {
-    if (
-      this.state.status !== "collecting" ||
-      previous.status === "collecting" ||
-      previous.status === "cancelling"
-    )
-      return null;
-    return this.#action.current!.form?.matches(":focus-within") ?? false;
-  }
-
-  componentDidUpdate(
-    _props: CollectControlsProps,
-    _state: CollectControlsState,
-    moveFocus: boolean | null,
-  ): void {
-    if (moveFocus) this.#action.current!.focus({ preventScroll: true });
-  }
-
-  componentWillUnmount(): void {
+  componentWillUnmount() {
     this.#disposed = true;
     this.#controller?.abort();
     this.#controller = null;
   }
-
-  #startCollect = async (
-    options: Parameters<typeof collectOrders>[1],
-  ): Promise<void> => {
-    if (this.#disposed || this.#controller) return;
-    let client: PddClient;
+  #prepare() {
+    if (this.#disposed || this.#controller) return null;
     try {
-      client = new PddClient();
+      return new PddClient();
     } catch (error) {
-      this.setState({ error });
-      return;
+      // 准备失败不触发开始通知，保留上一次可导出的结果。
+      this.setState({ error: describeError(error) });
+      return null;
     }
+  }
+  #finish(result: CollectResult | null, error: string | null = null) {
+    this.#controller = null;
+    this.setState({
+      status: result ? "complete" : "idle",
+      progress: null,
+      error,
+    });
+    this.props.onFinish(result);
+  }
+  #collect = async (options: CollectOptions) => {
+    const client = this.#prepare();
+    if (!client) return;
     const controller = new AbortController();
     this.#controller = controller;
     this.setState({ status: "collecting", progress: null, error: null });
     this.props.onStart();
     const entries: CollectedOrder[] = [];
+    let pages = 0;
+    try {
+      pages = await this.#readPages(client, options, controller, entries);
+    } catch (error) {
+      if (controller !== this.#controller) return;
+      if (!controller.signal.aborted) {
+        this.#finish(null, describeError(error));
+        return;
+      }
+      // 取消时交付已收到的条目；普通请求失败不交付部分结果。
+    }
+    if (controller !== this.#controller) return;
+    this.#finish({
+      entries,
+      partial: controller.signal.aborted || pages >= options.maxPages,
+      startDate: options.startDate,
+      endDate: options.endDate,
+    });
+  };
+  async #readPages(
+    client: PddClient,
+    options: CollectOptions,
+    controller: AbortController,
+    entries: CollectedOrder[],
+  ) {
     let progress: CollectCounts = {
       pages: 0,
       orders: 0,
       details: 0,
       currentPage: null,
     };
-    const publishProgress = () =>
-      this.setState({
-        status: controller.signal.aborted ? "cancelling" : "collecting",
-        progress,
-      });
-    try {
-      collection: for await (const { total, orders } of collectOrders(
-        client,
-        options,
-        controller.signal,
-      )) {
-        if (controller !== this.#controller) return;
-        if (controller.signal.aborted) break;
-        let completed = 0;
+    collection: for await (const { total, orders } of collectOrders(
+      client,
+      options,
+      controller.signal,
+    )) {
+      if (controller !== this.#controller || controller.signal.aborted) break;
+      let completed = 0;
+      progress = {
+        ...progress,
+        pages: progress.pages + 1,
+        currentPage: { completed, total },
+      };
+      this.#publish(controller, progress);
+      for await (const entry of orders) {
+        if (controller !== this.#controller) break collection;
+        entries.push(entry);
+        completed++;
         progress = {
           ...progress,
-          pages: progress.pages + 1,
+          orders: entries.length,
+          details: progress.details + (entry.detail === null ? 0 : 1),
           currentPage: { completed, total },
         };
-        publishProgress();
-        for await (const entry of orders) {
-          if (controller !== this.#controller) return;
-          entries.push(entry);
-          completed++;
-          progress = {
-            ...progress,
-            orders: entries.length,
-            details: progress.details + (entry.detail === null ? 0 : 1),
-            currentPage: { completed, total },
-          };
-          publishProgress();
-          if (controller.signal.aborted) break collection;
-        }
-        if (controller !== this.#controller) return;
-        if (controller.signal.aborted) break;
-        progress = { ...progress, currentPage: null };
-        publishProgress();
+        this.#publish(controller, progress);
+        if (controller.signal.aborted) break collection;
       }
-    } catch (error) {
-      if (controller !== this.#controller) return;
-      if (!controller.signal.aborted) {
-        this.#controller = null;
-        this.setState({ status: "idle", progress: null, error });
-        this.props.onFinish(null);
-        return;
-      }
-      // 取消时发布已收到的条目；其他异常已经在上面结束任务。
+      if (controller !== this.#controller || controller.signal.aborted) break;
+      progress = { ...progress, currentPage: null };
+      this.#publish(controller, progress);
     }
-    if (controller !== this.#controller) return;
-    this.#controller = null;
-    this.setState({ status: "complete", progress: null });
-    this.props.onFinish({
-      entries,
-      partial: controller.signal.aborted || progress.pages >= options.maxPages,
-      startDate: options.startDate,
-      endDate: options.endDate,
+    return progress.pages;
+  }
+  #publish(controller: AbortController, progress: CollectCounts) {
+    this.setState({
+      status: controller.signal.aborted ? "cancelling" : "collecting",
+      progress,
     });
-  };
-
-  /** 同步确认是否存在任务，让尚未完成渲染的操作按钮也能立即停止。 */
-  cancel = (): boolean => {
+  }
+  #cancel = () => {
     const controller = this.#controller;
     if (!controller) return false;
     if (!controller.signal.aborted) {
@@ -179,21 +147,11 @@ export interface CollectResult {
   readonly startDate: Date | null;
   readonly endDate: Date | null;
 }
-
-function describeError(error: unknown): string {
-  if (error instanceof PddError) return error.message;
-  return "操作失败，请稍后重试。";
-}
-
-interface CollectControlsProps {
-  /** 客户端准备成功，开始一次新收集。 */
-  onStart: () => void;
-  /** 正常结束或取消时交出结果；null 表示失败，错误由本组件展示。 */
-  onFinish: (result: CollectResult | null) => void;
-}
-
-interface CollectControlsState {
-  status: "idle" | "collecting" | "cancelling" | "complete";
+export interface CollectionState {
+  status: CollectStatus;
   progress: CollectCounts | null;
-  error: unknown;
+  error: string | null;
+}
+function describeError(error: unknown): string {
+  return error instanceof PddError ? error.message : "操作失败，请稍后重试。";
 }

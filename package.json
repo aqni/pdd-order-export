@@ -13,7 +13,7 @@
     "build": "vite build",
     "postbuild": "prettier --write --ignore-path= \"dist/*.js\"",
     "preview": "vite preview",
-    "version": "node --experimental-strip-types scripts/version.ts",
+    "version": "node scripts/version.ts",
     "format": "prettier --write . \"!package-lock.json\"",
     "format:check": "prettier --check . \"!package-lock.json\"",
     "typecheck": "ttsc --noEmit",

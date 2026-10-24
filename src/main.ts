@@ -1,4 +1,4 @@
-import { createElement, render } from "preact";
+import { h, render } from "preact";
 import { ExportPanel } from "./ui";
 import stylesheet from "./ui/styles.css?style";
 
@@ -11,7 +11,7 @@ if (!document.getElementById(hostId)) {
   const shadow = host.attachShadow({ mode: "open" });
   shadow.append(stylesheet.cloneNode(true), mountNode);
   host.id = hostId;
-  render(createElement(ExportPanel, {}), mountNode);
+  render(h(ExportPanel, {}), mountNode);
   document.body.append(host);
   import.meta.hot?.dispose(() => {
     render(null, mountNode);

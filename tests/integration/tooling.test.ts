@@ -1,5 +1,6 @@
 import { afterEach, test, expect, vi } from "vitest";
 import { createServer } from "vite";
+import { glob } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -24,22 +25,10 @@ test("the real development server serves an installable script and compiled vali
     const module = await (await fetch(base + "/src/pdd.ts")).text();
     expect(module).toContain("getOrderDetail");
     expect(module).not.toMatch(/\bassert<|\bassert\s*\(/);
-    for (const component of [
-      "ui/index.tsx",
-      "ui/collect/form.tsx",
-      "ui/collect/controls.tsx",
-      "ui/collect/action.tsx",
-      "ui/collect/date-range.tsx",
-      "ui/collect/request-settings.tsx",
-      "ui/collect/details-option.tsx",
-      "ui/collect/progress.tsx",
-      "ui/export/controls.tsx",
-      "ui/export/actions.tsx",
-      "ui/collect/date-field.tsx",
-      "ui/dialog.tsx",
-      "main.ts",
-    ]) {
-      const response = await fetch(base + `/src/${component}`);
+    for await (const component of glob(["src/ui/**/*.tsx", "src/main.ts"])) {
+      const response = await fetch(
+        base + "/" + component.replaceAll("\\", "/"),
+      );
       expect(response.ok).toBe(true);
     }
   } finally {

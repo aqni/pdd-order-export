@@ -1,130 +1,178 @@
 :host {
   all: initial;
+  display: block;
 }
-:host,
-dialog {
+[data-ui="panel"] {
   color-scheme: light;
-  color: #222;
+  color: CanvasText;
   text-align: left;
-  font: medium/1.4 system-ui;
+  font: medium/1.5 system-ui;
 }
-* {
+button,
+input {
   box-sizing: border-box;
+  font: inherit;
+  max-inline-size: 100%;
 }
 [hidden] {
   display: none !important;
 }
-button,
-input {
-  font: inherit;
-  max-width: 100%;
+hr {
+  margin-block: 1em;
 }
-.launcher {
-  position: fixed;
-  right: 16px;
-  bottom: 20px;
-  z-index: 2147483647;
+
+/* 区域规则只覆盖自身 DOM，子区域以 data-ui 为边界。 */
+@scope ([data-ui="dialog"]) to (:scope [data-ui]) {
+  dialog {
+    box-sizing: border-box;
+    color: inherit;
+    font: inherit;
+    inline-size: 28em;
+    max-inline-size: calc(100vw - 24px);
+    max-block-size: calc(100dvh - 24px);
+  }
+  .layout {
+    display: grid;
+    gap: 1em;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+  }
+  h2 {
+    margin: 0;
+    font-size: 1.125em;
+  }
+  dialog[open] + .launcher {
+    display: none;
+  }
 }
-dialog {
-  width: fit-content;
-  max-width: min(448px, calc(100vw - 24px));
-  max-height: calc(100dvh - 24px);
-  border: 1px solid #aaa;
+
+@scope ([data-ui="positioner"]) {
+  :scope {
+    position: fixed;
+    right: 16px;
+    bottom: 20px;
+    z-index: 2147483647;
+    display: grid;
+    max-inline-size: 100vw;
+    touch-action: none;
+    user-select: none;
+    cursor: grab;
+  }
+  :scope:active {
+    cursor: grabbing;
+  }
+  :scope[data-positioned] {
+    left: clamp(0px, var(--left), calc(100vw - var(--width)));
+    top: clamp(0px, var(--top), calc(100dvh - var(--height)));
+    right: auto;
+    bottom: auto;
+  }
+  button {
+    cursor: inherit;
+  }
 }
-dialog::backdrop {
-  background: #0003;
+
+[data-ui="collect-form"] {
+  display: grid;
+  gap: 1em;
 }
-header {
+[data-ui="collect-action"] {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
 }
-h2,
-h3 {
-  margin: 0;
-  font-size: 1em;
+
+@scope ([data-ui="collect-settings"]) to (:scope [data-ui]) {
+  fieldset {
+    display: grid;
+    gap: 1em;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  small {
+    margin-inline-start: 0.75em;
+    font-weight: normal;
+    overflow-wrap: anywhere;
+  }
+  :scope[open] > summary {
+    margin-block-end: 0.75em;
+  }
+  :scope[open] > summary small {
+    display: none;
+  }
 }
-fieldset {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
+
+@scope ([data-ui="collect-dates"], [data-ui="collect-requests"]) {
+  .fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9em), 1fr));
+    gap: 0.75em 1em;
+  }
+  label {
+    display: grid;
+    gap: 0.25em;
+  }
+  input {
+    min-inline-size: 0;
+    inline-size: 100%;
+  }
+  small {
+    display: block;
+    margin-block-start: 0.25em;
+  }
+  summary {
+    cursor: pointer;
+  }
+  :scope[open] > summary {
+    margin-block-end: 0.75em;
+  }
 }
-.fields,
-.exports {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
+
+@scope ([data-ui="collect-feedback"]) to (:scope [data-ui]) {
+  [role="alert"] {
+    margin-block: 1em 0;
+    color: #a11;
+    overflow-wrap: anywhere;
+  }
 }
-.fields label {
-  min-width: 0;
+
+@scope ([data-ui="collect-progress"], [data-ui="export-result"]) {
+  :scope {
+    display: grid;
+    gap: 0.5em;
+  }
+  h3 {
+    margin: 0;
+    font-size: 1em;
+  }
+  p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  progress {
+    inline-size: 100%;
+  }
+  .counts {
+    font-variant-numeric: tabular-nums;
+  }
 }
-.fields input {
-  display: block;
-  min-width: 0;
-}
-.fields input[type="number"] {
-  width: 8ch;
-}
-.date-field {
-  position: relative;
-}
-.date-placeholder {
-  display: none;
-  position: absolute;
-  left: 4px;
-  bottom: 2px;
-  color: #666;
-  pointer-events: none;
-}
-input[data-empty]:not(:focus) + .date-placeholder {
-  display: block;
-}
-input[data-empty]:not(:focus)::-webkit-datetime-edit {
-  visibility: hidden;
-}
-.action,
-.exports {
-  margin-top: 8px;
-}
-.check {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 10px 0;
-}
-details {
-  padding: 8px;
-  border: 1px solid #bbb;
-}
-summary {
-  width: fit-content;
-  cursor: pointer;
-}
-details[open] > summary {
-  margin-bottom: 8px;
-}
-.settings[open] > summary .scope {
-  display: none;
-}
-.scope {
-  margin-left: 1em;
-}
-small {
-  color: #666;
-}
-p {
-  margin: 6px 0;
-  overflow-wrap: anywhere;
-}
-[role="alert"] {
-  color: #a11;
-}
-progress {
-  width: 100%;
-}
-.counts {
-  font-variant-numeric: tabular-nums;
+
+@scope ([data-ui="export"]) to (:scope [data-ui]) {
+  section {
+    display: grid;
+    gap: 0.75em;
+  }
+  .exports {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+  }
 }

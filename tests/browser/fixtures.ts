@@ -241,6 +241,7 @@ async function openShop(testInfo: TestInfo) {
       downloads,
       release,
       close,
+      panel: page.locator("#pdd-order-export"),
       dialog: page.getByRole("dialog", {
         name: "订单导出",
         includeHidden: true,

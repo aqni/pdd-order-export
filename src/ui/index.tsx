@@ -1,47 +1,27 @@
-import { Component, createRef, createElement } from "preact";
-import { CollectControls, type CollectResult } from "./collect/controls";
-import { ExportControls } from "./export/controls";
+import { Component, createRef, h } from "preact";
+import { CollectControls, type CollectResult } from "./collect";
+import { ExportControls } from "./export";
 import { ExportDialog } from "./dialog";
 
-/** UI 入口只协调阶段和结果快照，收集、取消及文件操作由子组件拥有。 */
-export class ExportPanel extends Component<
-  Record<string, never>,
-  ExportPanelState
-> {
-  state: ExportPanelState = { phase: "idle", result: null };
-  readonly #collect = createRef<CollectControls>();
+/** 只连接区域接口；收集任务和结果分别由各自组件持有。 */
+export class ExportPanel extends Component {
+  readonly #exports = createRef<ExportControls>();
 
-  render(_props: Record<string, never>, { phase, result }: ExportPanelState) {
+  render() {
     return (
-      <ExportDialog
-        running={phase === "collecting"}
-        onDismiss={this.#cancelCollect}
-      >
-        <CollectControls
-          ref={this.#collect}
-          onStart={this.#onStart}
-          onFinish={this.#onFinish}
-        />
-        <hr hidden={phase !== "exporting"} />
-        {phase === "exporting" && result !== null && (
-          <ExportControls result={result} />
-        )}
-      </ExportDialog>
+      <div data-ui="panel">
+        <ExportDialog>
+          <CollectControls onStart={this.#onStart} onFinish={this.#onFinish} />
+          <ExportControls ref={this.#exports} />
+        </ExportDialog>
+      </div>
     );
   }
 
   #onStart = () => {
-    this.setState({ phase: "collecting", result: null });
+    this.#exports.current!.setResult(null);
   };
   #onFinish = (result: CollectResult | null) => {
-    this.setState({ phase: result === null ? "idle" : "exporting", result });
+    this.#exports.current!.setResult(result);
   };
-  #cancelCollect = () => {
-    this.#collect.current?.cancel();
-  };
-}
-
-interface ExportPanelState {
-  phase: "idle" | "collecting" | "exporting";
-  result: CollectResult | null;
 }
