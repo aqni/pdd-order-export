@@ -10,6 +10,7 @@ export function createShop() {
       { order_sn: "261017-b", offset: "cursor:b", order_amount: 0 },
     ],
     holdDetails: false,
+    allowDetails: 0,
     pageSize: 20,
     requests: [] as { method: string; path: string; body: unknown }[],
     errors: [] as string[],
@@ -62,7 +63,10 @@ export function createShop() {
           orderDescList: [],
           marker: order.order_sn,
         };
-        if (fixture.holdDetails) {
+        if (
+          fixture.holdDetails &&
+          fixture.orders.indexOf(order) >= fixture.allowDetails
+        ) {
           await gate;
         }
         try {

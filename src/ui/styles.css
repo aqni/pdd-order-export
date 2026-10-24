@@ -115,43 +115,6 @@ details[open] > summary {
 small {
   color: #666;
 }
-.help {
-  display: inline-block;
-  anchor-scope: --help;
-}
-.help-anchor {
-  anchor-name: --help;
-}
-.help-anchor:not(button) {
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-  cursor: help;
-}
-.help-popup {
-  pointer-events: none;
-  position: fixed;
-  inset: auto;
-  position-anchor: --help;
-  position-area: bottom;
-  position-try-fallbacks: flip-block;
-  margin: 0;
-  width: max-content;
-  max-width: min(352px, calc(100vw - 24px));
-  padding: 8px 12px;
-  border: 1px solid #aaa;
-  color: #666;
-  font: inherit;
-  font-size: 0.875em;
-}
-.help-popup ul {
-  margin: 0;
-  padding-left: 1.25em;
-}
-section {
-  border-top: 1px solid #ddd;
-  margin-top: 12px;
-  padding-top: 12px;
-}
 p {
   margin: 6px 0;
   overflow-wrap: anywhere;

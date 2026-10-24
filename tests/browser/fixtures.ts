@@ -102,21 +102,13 @@ async function openShop(testInfo: TestInfo) {
     ["papaparse", "papaparse.min.js"],
     ["acorn", "dist/acorn.js"],
     ["wretch", "dist/bundle/wretch.min.js"],
+    ["preact", "dist/preact.umd.js"],
   ]) {
     const packagePath = require.resolve(name + "/package.json");
     const { version } = require(packagePath);
     dependencies.set(
       "https://cdn.jsdelivr.net/npm/" + name + "@" + version + "/" + file,
       await readFile(join(dirname(packagePath), file!), "utf8"),
-    );
-  }
-  {
-    const { version } = JSON.parse(
-      await readFile("node_modules/vanjs-core/package.json", "utf8"),
-    );
-    dependencies.set(
-      `https://cdn.jsdelivr.net/gh/vanjs-org/van@${version}/public/van-${version}.nomodule.min.js`,
-      await readFile(`node_modules/.cache/vanjs-core/${version}.js`, "utf8"),
     );
   }
   const extension = resolve("node_modules/.cache/tampermonkey", pin.version);

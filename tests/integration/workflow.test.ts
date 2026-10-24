@@ -1,25 +1,26 @@
 // @vitest-environment jsdom
+// @vitest-environment-options {"url":"https://mobile.pinduoduo.com/orders.html"}
 import { Blob } from "node:buffer";
 import { beforeEach, afterEach, expect, test, vi } from "vitest";
 import { PddClient } from "../../src/pdd";
-import { collectOrders } from "../../src/collect";
+import { collectOrders, type CollectedOrder } from "../../src/collect";
 import { exportFile } from "../../src/export";
-import type { CollectionEvent } from "../../src/collect";
 import sample from "../fixtures/orders/reviewed-orders/collected.json" with { type: "json" };
 
-const options = sample.options;
-
-async function drain(stream: AsyncIterable<CollectionEvent>) {
-  const events: CollectionEvent[] = [];
-  for await (const event of stream) {
-    events.push(event);
-  }
-  const terminal = events.at(-1);
-  if (terminal?.type !== "result") {
-    throw new Error("Stream has no final result");
-  }
-  return { events, result: terminal.result };
+async function drain(pages: ReturnType<typeof collectOrders>) {
+  const entries: CollectedOrder[] = [];
+  for await (const page of pages)
+    for await (const entry of page) entries.push(entry);
+  return entries;
 }
+
+const options = {
+  ...sample.options,
+  startDate: sample.options.startDate
+    ? new Date(sample.options.startDate)
+    : null,
+  endDate: sample.options.endDate ? new Date(sample.options.endDate) : null,
+};
 
 const pages = [sample.entries.slice(0, 2), sample.entries.slice(2)].map(
   (entries) => ({ orders: entries.map((entry) => entry.order) }),
@@ -32,9 +33,15 @@ beforeEach(() => {
     postTask: async (callback: () => unknown) => callback(),
   });
 });
-afterEach(() => vi.unstubAllGlobals());
-const client = (fetch: typeof globalThis.fetch) =>
-  new PddClient({ fetch, cookies: () => "pdd_user_id=123" });
+afterEach(() => {
+  document.cookie = "pdd_user_id=; Max-Age=0; Path=/";
+  vi.unstubAllGlobals();
+});
+const client = (fetch: typeof globalThis.fetch) => {
+  vi.stubGlobal("fetch", fetch);
+  document.cookie = "pdd_user_id=123; Path=/";
+  return new PddClient();
+};
 
 test("reviewed pages cross protocol validation, collection and both export formats without losing raw fields", async () => {
   let page = 0;
@@ -60,7 +67,7 @@ test("reviewed pages cross protocol validation, collection and both export forma
         ";</script>",
     );
   });
-  const pending = drain(
+  const result = await drain(
     collectOrders(
       client(fetcher),
       { ...options, pageSize: 50 },
@@ -68,26 +75,24 @@ test("reviewed pages cross protocol validation, collection and both export forma
     ),
   );
 
-  const { result } = await pending;
-  expect(result).toMatchObject({ complete: true, reason: "end" });
-  expect(result.entries.map((entry) => entry.order)).toEqual(
+  expect(result.map((entry) => entry.order)).toEqual(
     sample.entries.map((entry) => entry.order),
   );
-  expect(result.entries.map((entry) => entry.detail)).toEqual(
+  expect(result.map((entry) => entry.detail)).toEqual(
     sample.entries.map((entry) => entry.detail),
   );
-  expect(
-    JSON.parse(await exportFile(result, "json").blob.text()).entries,
-  ).toEqual(result.entries);
+  expect(JSON.parse(await exportFile(result, "json").blob.text())).toEqual(
+    result,
+  );
   expect(await exportFile(result, "csv").blob.text()).toContain(
-    result.entries[0]!.order.order_sn,
+    result[0]!.order.order_sn,
   );
   expect(fetcher).toHaveBeenCalledTimes(6);
 });
 
 // Mutate reviewed responses instead of constructing an unrelated toy protocol.
 test.each(["missing cursor", "invalid list"] as const)(
-  "rejects a successful HTTP response with %s, retaining the preceding page",
+  "rejects a successful HTTP response with %s without returning a partial result",
   async (defect) => {
     const broken = structuredClone(pages[1]!) as Record<string, unknown>;
     if (defect === "missing cursor") {
@@ -108,18 +113,7 @@ test.each(["missing cursor", "invalid list"] as const)(
       ),
     );
 
-    const { result } = await pending;
-    expect(result).toMatchObject({
-      reason: "failed",
-      complete: false,
-      error: expect.stringContaining("订单列表格式不符合预期"),
-    });
-    expect(result.entries.map((entry) => entry.order)).toEqual(
-      pages[0]!.orders,
-    );
+    await expect(pending).rejects.toThrow();
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(
-      JSON.parse(await exportFile(result, "json").blob.text()).entries,
-    ).toEqual(result.entries);
   },
 );

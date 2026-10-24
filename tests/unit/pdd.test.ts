@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @vitest-environment-options {"url":"https://mobile.pinduoduo.com/orders.html"}
 import { beforeEach, afterEach, expect, test, vi } from "vitest";
 import { PddClient } from "../../src/pdd";
 
@@ -32,11 +33,80 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  document.cookie = "pdd_user_id=; Max-Age=0; Path=/";
+  document.cookie = "pdd_user_id=; Max-Age=0; Path=/orders.html";
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-const client = (fetch: typeof globalThis.fetch) =>
-  new PddClient({ fetch, cookies: () => "pdd_user_id=123" });
+const client = (fetch: typeof globalThis.fetch) => {
+  vi.stubGlobal("fetch", fetch);
+  document.cookie = "pdd_user_id=123; Path=/";
+  return new PddClient();
+};
+
+test.each([new Error("custom cancellation"), "cancelled"])(
+  "cancelling the initial wait preserves the abort reason: %s",
+  async (reason) => {
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>();
+    const pending = client(fetcher)
+      .getOrders(null, 10, controller.signal)
+      .catch((error) => error);
+    controller.abort(reason);
+    await vi.runAllTimersAsync();
+    expect(await pending).toBe(reason);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  },
+);
+
+test("cancelling an in-flight request preserves its reason without retrying", async () => {
+  const controller = new AbortController();
+  const reason = new Error("stop this request");
+  const fetcher = vi.fn<typeof fetch>(
+    (_url, options) =>
+      new Promise((_, reject) => {
+        options!.signal!.addEventListener(
+          "abort",
+          () => reject(options!.signal!.reason),
+          { once: true },
+        );
+      }),
+  );
+  const pending = client(fetcher)
+    .getOrders(null, 10, controller.signal)
+    .catch((error) => error);
+  await vi.advanceTimersByTimeAsync(600);
+  expect(fetcher).toHaveBeenCalledOnce();
+  controller.abort(reason);
+  await vi.runAllTimersAsync();
+  expect(await pending).toBe(reason);
+  expect(fetcher).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test("pending response cleanup cannot prevent cancellation", async () => {
+  const controller = new AbortController();
+  const body = new ReadableStream({
+    cancel: () => new Promise<void>(() => {}),
+  });
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response(body, { status: 503 }));
+  let failure: unknown;
+  const pending = client(fetcher)
+    .getOrders(null, 10, controller.signal)
+    .catch((error) => {
+      failure = error;
+    });
+  await vi.advanceTimersByTimeAsync(600);
+  controller.abort();
+  await vi.runAllTimersAsync();
+  expect(failure).toBe(controller.signal.reason);
+  await pending;
+  expect(fetcher).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});
 
 test("retries only transport/server failures, preserving the original request across attempts", async () => {
   const discarded = new Response("temporary failure", { status: 503 });
@@ -125,9 +195,9 @@ test("an HTML detail for a different order and a login failure both stop without
   await vi.runAllTimersAsync();
   await denied;
   expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(
-    () => new PddClient({ cookies: () => "pdd_user_id=1; pdd_user_id=2" }),
-  ).toThrow();
+  document.cookie = "pdd_user_id=1; Path=/";
+  document.cookie = "pdd_user_id=2; Path=/orders.html";
+  expect(() => new PddClient()).toThrow();
 });
 
 test("rejects JavaScript expressions inside rawData without executing them", async () => {

@@ -1,74 +1,26 @@
-import type { ReadonlyExportResult } from "./collect";
+import type { CollectedOrder } from "./collect";
 import type { Order, OrderDetail } from "./pdd";
 import { createAssert, type tags } from "typia";
 import { unparse } from "papaparse";
-
-type NonNegativeInteger = number &
-  tags.Minimum<0> &
-  tags.TagBase<{
-    target: "number";
-    kind: "safeInteger";
-    value: true;
-    validate: "Number.isSafeInteger($input)";
-  }>;
-
-/** 在协议字段基础上补充 CSV 字段；金额单位为分，约束只影响 CSV 导出。 */
-interface ExportedOrder extends Order {
-  mall?: { mall_name?: string };
-  order_status_prompt?: string;
-  order_amount?: NonNegativeInteger;
-  order_goods?: {
-    goods_name?: string;
-    spec?: string;
-    goods_number?: NonNegativeInteger;
-    goods_price?: NonNegativeInteger;
-  }[];
-}
-
-interface ExportedOrderDetail extends OrderDetail {
-  orderDescList?: { key: string; value: string }[];
-}
-
-const formats = {
-  csv: {
-    encode: (result) => ["\ufeff", toCsv(result)],
-    type: "text/csv;charset=utf-8",
-  },
-  json: {
-    encode: (result) => [toJson(result)],
-    type: "application/json;charset=utf-8",
-  },
-} satisfies Record<
-  string,
-  { encode: (result: ReadonlyExportResult) => BlobPart[]; type: string }
->;
-
-export type FileFormat = keyof typeof formats;
 
 /**
  * 从收集结果生成文件，不修改原始数据。
  * @throws CSV 字段不符合模型时抛出 Typia 详细错误；JSON 不做 CSV 校验。
  */
 export function exportFile(
-  result: ReadonlyExportResult,
+  entries: readonly CollectedOrder[],
   format: FileFormat,
+  partial = false,
 ): { name: string; blob: Blob } {
-  const range = `${result.options.startDate || "不限"}至${result.options.endDate || "不限"}`;
-  const stamp = result.startedAt.replace(/[:.]/g, "-");
+  const date = new Date().toISOString().slice(0, 10);
   const { encode, type } = formats[format];
   return {
-    name: `拼多多账单_${range}_${stamp}${result.complete ? "" : "_不完整"}.${format}`,
-    blob: new Blob(encode(result), { type }),
+    name: `拼多多账单_${date}${partial ? "_不完整" : ""}.${format}`,
+    blob: new Blob(encode(entries), { type }),
   };
 }
 
-export function downloadFile({
-  name,
-  blob,
-}: {
-  name: string;
-  blob: Blob;
-}): void {
+export function downloadFile(name: string, blob: Blob): void {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = name;
@@ -83,29 +35,68 @@ export function downloadFile({
   }
 }
 
-function toCsv(result: ReadonlyExportResult): string {
-  return unparse(toTable(result), { escapeFormulae: true });
+type NonNegativeSafeInteger = number &
+  tags.Minimum<0> &
+  tags.TagBase<{
+    target: "number";
+    kind: "safeInteger";
+    value: true;
+    validate: "Number.isSafeInteger($input)";
+  }>;
+
+/** 在协议字段基础上补充 CSV 字段；金额单位为分，约束只影响 CSV 导出。 */
+interface CsvOrder extends Order {
+  mall?: { mall_name?: string };
+  order_status_prompt?: string;
+  order_amount?: NonNegativeSafeInteger;
+  order_goods?: {
+    goods_name?: string;
+    spec?: string;
+    goods_number?: NonNegativeSafeInteger;
+    goods_price?: NonNegativeSafeInteger;
+  }[];
 }
 
-function toJson(result: ReadonlyExportResult): string {
-  return JSON.stringify(result, null, 2);
+interface CsvOrderDetail extends OrderDetail {
+  orderDescList?: { key: string; value: string }[];
 }
+
+const formats = {
+  csv: {
+    encode: (entries) => [
+      "\ufeff",
+      unparse(toCsvRows(entries), { escapeFormulae: true }),
+    ],
+    type: "text/csv;charset=utf-8",
+  },
+  json: {
+    encode: (entries) => [JSON.stringify(entries, null, 2)],
+    type: "application/json;charset=utf-8",
+  },
+} satisfies Record<
+  string,
+  { encode: (entries: readonly CollectedOrder[]) => BlobPart[]; type: string }
+>;
+
+type FileFormat = keyof typeof formats;
 
 // 模块级生成一次校验函数，保留字段路径等诊断供数据问题定位。
-const assertExportedOrder = createAssert<ExportedOrder>();
-const assertExportedOrderDetail = createAssert<ExportedOrderDetail | null>();
+const assertCsvOrder = createAssert<CsvOrder>();
+const assertCsvOrderDetail = createAssert<CsvOrderDetail | null>();
 
 /** 属性插入顺序决定 CSV 列顺序；所有格式化均作用于新建的表格记录。 */
-function toTable(result: ReadonlyExportResult): Record<string, string>[] {
-  return result.entries.map((entry) => {
-    const order = assertExportedOrder(entry.order);
-    const detail = assertExportedOrderDetail(entry.detail);
-    const details = detailFields(detail?.orderDescList);
+function toCsvRows(
+  entries: readonly CollectedOrder[],
+): Record<string, string>[] {
+  return entries.map((entry) => {
+    const order = assertCsvOrder(entry.order);
+    const detail = assertCsvOrderDetail(entry.detail);
+    const details = indexDetailFields(detail?.orderDescList);
     return {
       订单编号: order.order_sn,
-      订单金额: amount(order.order_amount),
+      订单金额: formatAmount(order.order_amount),
       店铺: order.mall?.mall_name ?? "",
-      商品: goods(order.order_goods),
+      商品: formatGoods(order.order_goods),
       订单状态: order.order_status_prompt ?? "",
       支付方式: details.get("支付方式") ?? "",
       下单时间: details.get("下单时间") ?? "",
@@ -115,7 +106,7 @@ function toTable(result: ReadonlyExportResult): Record<string, string>[] {
   });
 }
 
-function amount(value: NonNegativeInteger | undefined): string {
+function formatAmount(value: NonNegativeSafeInteger | undefined): string {
   if (value === undefined) {
     return "";
   }
@@ -124,7 +115,7 @@ function amount(value: NonNegativeInteger | undefined): string {
   return `${cents.slice(0, -2)}.${cents.slice(-2)}`;
 }
 
-function goods(value: ExportedOrder["order_goods"]): string {
+function formatGoods(value: CsvOrder["order_goods"]): string {
   // 商品名和规格中的分隔符换成空格，避免与摘要的字段、商品边界混淆。
   const clean = (text = "") => text.replace(/[,;，；\s]+/g, " ").trim();
   return (value ?? [])
@@ -132,7 +123,7 @@ function goods(value: ExportedOrder["order_goods"]): string {
       const spec = clean(item.spec);
       const name = clean(item.goods_name);
       const quantity = item.goods_number;
-      const price = amount(item.goods_price);
+      const price = formatAmount(item.goods_price);
       return [
         name ? `商品：${name}` : "",
         spec ? `规格：${spec}` : "",
@@ -146,8 +137,8 @@ function goods(value: ExportedOrder["order_goods"]): string {
     .join("；");
 }
 
-function detailFields(
-  value: ExportedOrderDetail["orderDescList"],
+function indexDetailFields(
+  value: CsvOrderDetail["orderDescList"],
 ): ReadonlyMap<string, string> {
   const fields = new Map<string, string>();
   for (const { key, value: content } of value ?? []) {

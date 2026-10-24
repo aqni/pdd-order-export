@@ -19,27 +19,24 @@ export default defineConfig(({ mode, command, isPreview }) => {
     // 避免依赖扫描阶段再次触发应用 TypeScript 的 Typia 编译。
     optimizeDeps: {
       noDiscovery: true,
-      include: ["papaparse", "acorn", "wretch", "typia", "vanjs-core"],
+      include: ["papaparse", "acorn", "wretch", "typia", "preact"],
     },
     build: {
       target: "es2022",
       minify: false,
       cssMinify: false,
-      rolldownOptions: { output: { comments: true } },
+      rolldownOptions: {
+        output: { comments: { legal: true, jsdoc: true, annotation: false } },
+      },
     },
     // monkey 处理最终用户脚本包装，放在源码转换插件之后。
     plugins: [
       ttsc(),
       monkey({
-        server: { open: mode === "test" ? false : undefined },
         entry: "src/main.ts",
         build: {
           externalGlobals: {
-            "vanjs-core": [
-              "van",
-              (version) =>
-                `https://cdn.jsdelivr.net/gh/vanjs-org/van@${version}/public/van-${version}.nomodule.min.js`,
-            ],
+            preact: cdn.jsdelivr("preact", "dist/preact.umd.js"),
             papaparse: cdn.jsdelivr("Papa", "papaparse.min.js"),
             acorn: cdn.jsdelivr("acorn", "dist/acorn.js"),
             wretch: cdn.jsdelivr("wretch", "dist/bundle/wretch.min.js"),

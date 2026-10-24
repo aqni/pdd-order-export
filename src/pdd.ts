@@ -11,7 +11,7 @@ import wretch from "wretch";
 
 /** 只声明收集所需的协议字段，其他原始字段随响应保留。 */
 export interface Order extends Record<string, unknown> {
-  order_sn: string & tags.Pattern<"\\S">;
+  order_sn: string;
   offset: string;
 }
 
@@ -30,26 +30,12 @@ export class PddError extends Error {
   }
 }
 
-interface PddClientOptions {
-  fetch?: typeof globalThis.fetch;
-  cookies?: () => string;
-}
-
-const isOrderList = createIs<{
-  orders: Order[];
-}>();
-
 /** 封装拼多多请求与协议校验；分页位置由调用方维护。 */
 export class PddClient {
-  readonly #http;
   readonly #uid: UserId;
 
-  constructor({
-    fetch = (...args) => globalThis.fetch(...args),
-    cookies = () => document.cookie,
-  }: PddClientOptions = {}) {
-    this.#uid = parseUserId(cookies());
-    this.#http = createPddRequest(fetch);
+  constructor() {
+    this.#uid = parseUserId(document.cookie);
   }
 
   /**
@@ -61,12 +47,11 @@ export class PddClient {
     size: number,
     signal: AbortSignal,
   ): Promise<Order[]> {
-    const { orders } = await this.#http
+    const { orders } = await createPddRequest(signal)
       .url(
         "/proxy/api/api/aristotle/order_list_v4?" +
           new URLSearchParams({ pdduid: this.#uid }),
       )
-      .options({ signal })
       .post(offset === null ? { size } : { size, offset })
       .json((value) => {
         if (!isOrderList(value)) {
@@ -82,20 +67,23 @@ export class PddClient {
 
   /** 读取详情并核对订单编号，防止返回登录页或其他订单的数据。 */
   async getOrderDetail(
-    order_sn: string,
+    orderSn: string,
     signal: AbortSignal,
   ): Promise<OrderDetail> {
-    const detail = await this.#http
-      .url("/order.html?" + new URLSearchParams({ order_sn }))
-      .options({ signal })
+    const detail = await createPddRequest(signal)
+      .url("/order.html?" + new URLSearchParams({ order_sn: orderSn }))
       .get()
       .text(parseOrderDetail);
-    if (detail.orderSn !== order_sn) {
-      throw new PddError("详情内容不符合当前订单，已保留列表数据。", "schema");
+    if (detail.orderSn !== orderSn) {
+      throw new PddError("详情内容不符合当前订单。", "schema");
     }
     return detail;
   }
 }
+
+const isOrderList = createIs<{
+  orders: Order[];
+}>();
 
 type UserId = string & tags.Pattern<"^[1-9][0-9]*$">;
 
@@ -103,14 +91,13 @@ const isSingleUserId = createIs<[UserId]>();
 
 function parseUserId(cookies: string): UserId {
   try {
-    const ids = [
-      ...new Set(
-        Array.from(
-          cookies.matchAll(/(?:^|;)\s*pdd_user_id=([^;]*)/g),
-          ([, value = ""]) => decodeURIComponent(value.trim()),
-        ),
-      ),
-    ];
+    const values = new Set<string>();
+    for (const [, value = ""] of cookies.matchAll(
+      /(?:^|;)\s*pdd_user_id=([^;]*)/g,
+    )) {
+      values.add(decodeURIComponent(value.trim()));
+    }
+    const ids = [...values];
     if (isSingleUserId(ids)) {
       return ids[0];
     }
@@ -123,38 +110,10 @@ function parseUserId(cookies: string): UserId {
   );
 }
 
-function createPddRequest(fetch: typeof globalThis.fetch) {
+function createPddRequest(signal: AbortSignal) {
   return wretch()
-    .fetchPolyfill(async (url, options) => {
-      const signal = options.signal ?? undefined;
-      // 初次等待与重试退避都使用同一取消信号。
-      await scheduler.postTask(() => {}, { delay: 600, signal });
-      for (let attempt = 0; ; attempt++) {
-        signal?.throwIfAborted();
-        let response: Response | undefined;
-        try {
-          response = await fetch(url, options);
-        } catch (error) {
-          if (signal?.aborted || attempt === 2) {
-            throw error;
-          }
-        }
-        // 只重试网络异常和 5xx；登录失效、限流等响应交由调用方处理。
-        if (
-          response &&
-          (response.ok || response.status < 500 || attempt === 2)
-        ) {
-          return response;
-        }
-        // 重试前释放未消费的响应；清理失败不应阻止后续请求。
-        if (response?.body) await response.body.cancel().catch(() => {});
-        await scheduler.postTask(() => {}, {
-          delay: 500 * (attempt + 1),
-          signal,
-        });
-      }
-    })
-    .options({ credentials: "include", redirect: "error" })
+    .fetchPolyfill((url, options) => fetchWithRetry(url, options, signal))
+    .options({ signal, credentials: "include", redirect: "error" })
     .customError((error) => {
       if (error.status === 401 || error.status === 403) {
         return new PddError(
@@ -167,15 +126,38 @@ function createPddRequest(fetch: typeof globalThis.fetch) {
       }
       return new PddError(`请求失败（HTTP ${error.status}），请稍后再试。`);
     })
-    .catcher("AbortError", (error) => {
-      throw error;
-    })
     .catcherFallback((error) => {
+      signal.throwIfAborted();
       if (error instanceof PddError) {
         throw error;
       }
       throw new PddError("请求失败，请检查网络后重试。");
     });
+}
+
+/** 最多请求三次；初次等待、重试退避与网络请求共用取消信号。 */
+async function fetchWithRetry(
+  url: RequestInfo | URL,
+  options: RequestInit | undefined,
+  signal: AbortSignal,
+): Promise<Response> {
+  await scheduler.postTask(() => {}, { delay: 600, signal });
+  for (let attempt = 1; ; attempt++) {
+    signal.throwIfAborted();
+    const isLastAttempt = attempt === 3;
+    let response: Response | undefined;
+    try {
+      response = await globalThis.fetch(url, options);
+    } catch (error) {
+      if (signal.aborted || isLastAttempt) throw error;
+    }
+    // 只重试网络异常和 5xx；其他响应交由请求层处理。
+    if (response && (response.status < 500 || isLastAttempt)) return response;
+
+    // 清理可能挂起，因此发起清理后直接进入退避等待。
+    void response?.body?.cancel().catch(() => {});
+    await scheduler.postTask(() => {}, { delay: 500 * attempt, signal });
+  }
 }
 
 // 只校验定位 window.rawData 所需的节点，避免展开 Acorn 的完整递归 AST。
@@ -200,14 +182,16 @@ const parseRawData = json.createIsParse<{
 function parseOrderDetail(html: string): OrderDetail {
   const document = new DOMParser().parseFromString(html, "text/html");
   for (const script of document.scripts) {
+    const source = script.text;
+    if (!source.trim()) continue;
     try {
-      const program = parse(script.text, { ecmaVersion: "latest" });
+      const program = parse(source, { ecmaVersion: "latest" });
       for (const statement of program.body) {
         if (!isRawDataStatement(statement)) {
           continue;
         }
         const { right } = statement.expression;
-        const payload = parseRawData(script.text.slice(right.start, right.end));
+        const payload = parseRawData(source.slice(right.start, right.end));
         if (payload) {
           return payload.data;
         }

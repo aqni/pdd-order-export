@@ -1,158 +1,257 @@
 import { expect, test, vi } from "vitest";
-import { collectOrders, validateOptions } from "../../src/collect";
+import { collectOrders } from "../../src/collect";
+import type { CollectedOrder } from "../../src/collect";
 import { PddError, type Order } from "../../src/pdd";
-import type { CollectionEvent, ExportOptions } from "../../src/collect";
-
-const options: ExportOptions = {
-  startDate: "",
-  endDate: "",
+const options: Parameters<typeof collectOrders>[1] = {
+  startDate: null,
+  endDate: null,
   pageSize: 10,
   maxPages: 10,
   includeDetails: true,
 };
+const signal = new AbortController().signal;
+
+test("collection leaves caller-owned UTC dates unchanged", async () => {
+  const startDate = new Date("2026-10-17");
+  const endDate = new Date("2026-10-17");
+  const api = source([[order("261017-a"), order("261016-old")]]);
+  const entries = await drain(
+    collectOrders(api, { ...options, startDate, endDate }, signal),
+  );
+  expect(entries.map((entry) => entry.order.order_sn)).toEqual(["261017-a"]);
+  expect(startDate.toISOString()).toBe("2026-10-17T00:00:00.000Z");
+  expect(endDate.toISOString()).toBe("2026-10-17T00:00:00.000Z");
+});
+
+test("page counts accept the full uint32 range", async () => {
+  expect(
+    await drain(
+      collectOrders(source([]), { ...options, maxPages: 2 ** 32 - 1 }, signal),
+    ),
+  ).toEqual([]);
+  for (const maxPages of [-1, 1.5, 2 ** 32, Infinity, NaN]) {
+    await expect(
+      collectOrders(source([]), { ...options, maxPages }, signal).next(),
+    ).rejects.toThrow();
+  }
+});
+
+test("zero pages make no requests and zero page size is forwarded", async () => {
+  const api = source([]);
+  expect(
+    await drain(collectOrders(api, { ...options, maxPages: 0 }, signal)),
+  ).toEqual([]);
+  expect(api.getOrders).not.toHaveBeenCalled();
+  expect(
+    await drain(collectOrders(api, { ...options, pageSize: 0 }, signal)),
+  ).toEqual([]);
+  expect(api.getOrders).toHaveBeenCalledWith(null, 0, signal);
+});
+
 function order(id = "261017-a", fields: Record<string, unknown> = {}): Order {
   return { order_sn: id, offset: "cursor:" + id, ...fields };
 }
-async function drain(stream: AsyncIterable<CollectionEvent>) {
-  const events: CollectionEvent[] = [];
-  for await (const event of stream) {
-    events.push(event);
-  }
-  const terminal = events.at(-1);
-  if (terminal?.type !== "result") {
-    throw new Error("Stream has no final result");
-  }
-  return { events, result: terminal.result };
-}
-
 function source(pages: Order[][]) {
   let index = 0;
   return {
-    getOrders: vi.fn(async () => pages[index++] ?? []),
-    getOrderDetail: vi.fn(async (id: string) => ({ orderSn: id, marker: id })),
+    getOrders: vi.fn(
+      async (_cursor: string | null, _size: number, active: AbortSignal) => {
+        active.throwIfAborted();
+        return pages[index++] ?? [];
+      },
+    ),
+    getOrderDetail: vi.fn(async (id: string, active: AbortSignal) => {
+      active.throwIfAborted();
+      return { orderSn: id, marker: id };
+    }),
   };
 }
+async function nextPage(stream: ReturnType<typeof collectOrders>) {
+  const step = await stream.next();
+  if (step.done) throw new Error("Expected another page");
+  return step.value;
+}
+async function drain(stream: ReturnType<typeof collectOrders>) {
+  const entries: CollectedOrder[] = [];
+  for await (const page of stream)
+    for await (const entry of page) entries.push(entry);
+  return entries;
+}
 
-test("descending dates stop within the page, preserving inclusive bounds and opaque cursors", async () => {
-  const newer = order("261018-new");
-  const first = order("261017-a", { offset: "opaque/not-an-order-id" });
-  const last = order("261016-b");
+test("both paging and details advance lazily, without a separate page data wrapper", async () => {
   const api = source([
-    [newer, first],
-    [last, order("261015-old"), order("261014-unvisited")],
+    [order("261017-a"), order("261017-b")],
+    [order("261016-c")],
   ]);
-  const signal = new AbortController().signal;
-  const { events, result } = await drain(
-    collectOrders(
-      api,
-      { ...options, startDate: "2026-10-16", endDate: "2026-10-17" },
-      signal,
-    ),
-  );
+  const pages = collectOrders(api, options, signal);
+  expect(api.getOrders).not.toHaveBeenCalled();
+  const page = await nextPage(pages);
+  expect(api.getOrders).toHaveBeenCalledOnce();
+  expect(api.getOrderDetail).not.toHaveBeenCalled();
+  expect("entries" in page).toBe(false);
+  const first = await page.next();
+  expect(first.value).toMatchObject({
+    order: { order_sn: "261017-a" },
+    detail: { marker: "261017-a" },
+  });
+  expect(api.getOrderDetail).toHaveBeenCalledTimes(1);
+  expect(api.getOrders).toHaveBeenCalledTimes(1);
+  await page.return();
+  await pages.return();
+  expect(api.getOrderDetail).toHaveBeenCalledTimes(1);
+  expect(api.getOrders).toHaveBeenCalledTimes(1);
+});
+
+test("skipping an inner iterator fetches no detail and outer cursors remain opaque", async () => {
+  const first = order("261017-a", { offset: "opaque/not-an-order-id" });
+  const api = source([[first], [order("261016-b")]]);
+  const pages = collectOrders(api, options, signal);
+  await nextPage(pages);
+  const page = await nextPage(pages);
+  expect(api.getOrderDetail).not.toHaveBeenCalled();
   expect(api.getOrders.mock.calls).toEqual([
     [null, 10, signal],
     [first.offset, 10, signal],
   ]);
-  expect(result).toMatchObject({
-    complete: true,
-    reason: "range",
-    progress: { pages: 2, scanned: 4, selected: 2 },
-  });
-  expect(result.entries.map((entry) => entry.order.order_sn)).toEqual([
+  await page.next();
+  expect(api.getOrderDetail).toHaveBeenCalledWith("261016-b", signal);
+  await pages.return();
+});
+
+test("descending dates preserve inclusive bounds and stop further paging", async () => {
+  const first = order("261017-a"),
+    last = order("261016-b");
+  const api = source([
+    [order("261018-new"), first],
+    [last, order("261015-old"), order("261014-unvisited")],
+  ]);
+  const entries = await drain(
+    collectOrders(
+      api,
+      {
+        ...options,
+        startDate: new Date("2026-10-16"),
+        endDate: new Date("2026-10-17"),
+      },
+      signal,
+    ),
+  );
+  expect(entries.map((e) => e.order.order_sn)).toEqual([
     first.order_sn,
     last.order_sn,
   ]);
+  expect(api.getOrders).toHaveBeenCalledTimes(2);
   expect(api.getOrderDetail.mock.calls.map(([id]) => id)).toEqual([
     first.order_sn,
     last.order_sn,
   ]);
-  expect(events.filter((event) => event.type === "result")).toHaveLength(1);
-  expect(events[0]).toMatchObject({ type: "progress", progress: { pages: 0 } });
 });
 
-test("cancelling at a yield keeps the whole received page and starts no detail request", async () => {
+test("an already aborted signal reaches the client and preserves its reason", async () => {
+  const api = source([[order()]]),
+    reason = new Error("stop");
+  const active = AbortSignal.abort(reason);
+  await expect(collectOrders(api, options, active).next()).rejects.toBe(reason);
+  expect(api.getOrders).toHaveBeenCalledWith(null, 10, active);
+});
+
+test("the consumer retains yielded entries and breaks without fetching remaining details", async () => {
   const controller = new AbortController();
-  const page = [order("261017-a"), order("261017-b")];
-  const api = source([page]);
-  const stream = collectOrders(api, options, controller.signal);
-  await stream.next();
-  const received = await stream.next();
-  expect(received.value).toMatchObject({
-    type: "progress",
-    progress: { selected: 2 },
-  });
-  controller.abort();
-  const { result } = await drain(stream);
-  expect(result).toMatchObject({ reason: "cancelled", complete: false });
-  expect(result.entries.map((entry) => entry.order)).toEqual(page);
-  expect(api.getOrderDetail).not.toHaveBeenCalled();
+  const api = source([[order("261017-a"), order("261017-b")]]);
+  const saved: CollectedOrder[] = [];
+  pages: for await (const page of collectOrders(
+    api,
+    options,
+    controller.signal,
+  )) {
+    for await (const entry of page) {
+      saved.push(entry);
+      controller.abort();
+      break pages;
+    }
+  }
+  expect(saved.map((e) => e.order.order_sn)).toEqual(["261017-a"]);
+  expect(api.getOrderDetail).toHaveBeenCalledOnce();
+  expect(api.getOrders).toHaveBeenCalledOnce();
 });
 
-test("one broken detail stops the task without dropping its siblings or earlier detail", async () => {
+test("cancellation during a detail request throws without generating a partial entry", async () => {
+  const controller = new AbortController();
   const api = source([
     [order("261017-a"), order("261017-b"), order("261017-c")],
   ]);
   api.getOrderDetail
     .mockResolvedValueOnce({ orderSn: "261017-a", marker: "kept" })
-    .mockRejectedValueOnce(new PddError("详情不可用"));
-  const { result } = await drain(
-    collectOrders(api, options, new AbortController().signal),
-  );
-  expect(result).toMatchObject({
-    complete: false,
-    reason: "failed",
-    error: "详情不可用",
-  });
-  expect(result.entries).toHaveLength(3);
-  expect(result.entries.map((entry) => entry.detail)).toEqual([
-    { orderSn: "261017-a", marker: "kept" },
-    null,
-    null,
-  ]);
+    .mockImplementationOnce(async (_id, active) => {
+      controller.abort();
+      active.throwIfAborted();
+      return { orderSn: "unreachable", marker: "unreachable" };
+    });
+  const page = await nextPage(collectOrders(api, options, controller.signal));
+  const first = await page.next();
+  await expect(page.next()).rejects.toBe(controller.signal.reason);
+  expect(first.value).toMatchObject({ detail: { marker: "kept" } });
   expect(api.getOrderDetail).toHaveBeenCalledTimes(2);
-  expect(api.getOrders).toHaveBeenCalledTimes(1);
 });
 
-test("an unrecognizable date stops filtering and keeps preceding orders", async () => {
-  const kept = order();
-  const api = source([[kept, order("not-a-date"), order("261016-unvisited")]]);
-  const { result } = await drain(
+test("detail failures propagate unchanged and start no subsequent requests", async () => {
+  const api = source([[order(), order("261017-b")]]),
+    error = new PddError("detail unavailable");
+  api.getOrderDetail.mockRejectedValueOnce(error);
+  await expect(drain(collectOrders(api, options, signal))).rejects.toBe(error);
+  expect(api.getOrderDetail).toHaveBeenCalledOnce();
+  expect(api.getOrders).toHaveBeenCalledOnce();
+});
+
+test("invalid dates reject page selection before any detail request", async () => {
+  const api = source([[order("not-a-date")]]);
+  await expect(
     collectOrders(
       api,
-      { ...options, startDate: "2026-10-01" },
-      new AbortController().signal,
-    ),
-  );
-  expect(result).toMatchObject({
-    reason: "failed",
-    complete: false,
-    error: "无法识别订单日期。",
-    progress: { pages: 1, scanned: 2, selected: 1 },
-  });
-  expect(result.entries).toEqual([{ order: kept, detail: null }]);
-  expect(api.getOrders).toHaveBeenCalledOnce();
+      { ...options, startDate: new Date("2026-10-01") },
+      signal,
+    ).next(),
+  ).rejects.toThrow();
   expect(api.getOrderDetail).not.toHaveBeenCalled();
 });
 
-test("unfiltered collection does not require recognizable dates", async () => {
-  const page = [order("not-a-date")];
-  const { result } = await drain(
-    collectOrders(source([page]), options, new AbortController().signal),
-  );
-  expect(result).toMatchObject({ reason: "end", complete: true });
-  expect(result.entries.map((entry) => entry.order)).toEqual(page);
+test("list-only iteration accepts opaque IDs and consumer break needs no detail request", async () => {
+  const api = source([[order("not-a-date"), order("another")]]);
+  const saved: CollectedOrder[] = [];
+  pages: for await (const page of collectOrders(
+    api,
+    { ...options, includeDetails: false },
+    signal,
+  )) {
+    for await (const entry of page) {
+      saved.push(entry);
+      break pages;
+    }
+  }
+  expect(saved).toEqual([{ order: order("not-a-date"), detail: null }]);
+  expect(api.getOrderDetail).not.toHaveBeenCalled();
+  expect(api.getOrders).toHaveBeenCalledOnce();
 });
 
-test("a page cap cannot claim completeness and invalid date options are rejected", async () => {
-  const limited = await drain(
-    collectOrders(
-      source([[order()]]),
-      { ...options, maxPages: 1 },
-      new AbortController().signal,
-    ),
-  );
-  expect(limited.result).toMatchObject({ reason: "limit", complete: false });
-  expect(() =>
-    validateOptions({ ...options, startDate: "2026-02-30" }),
-  ).toThrow();
+test("page caps avoid extra requests and invalid page sizes fail before requests", async () => {
+  const api = source([[order()], [order("261016-b")]]);
+  expect(
+    await drain(collectOrders(api, { ...options, maxPages: 1 }, signal)),
+  ).toHaveLength(1);
+  expect(api.getOrders).toHaveBeenCalledOnce();
+  await expect(
+    collectOrders(api, { ...options, pageSize: 51 }, signal).next(),
+  ).rejects.toThrow();
+  expect(api.getOrders).toHaveBeenCalledOnce();
+});
+
+test("independent iterators start with fresh cursors and signals", async () => {
+  const api = source([[order()], [order("261017-b")]]);
+  const previous = collectOrders(api, options, signal);
+  await nextPage(previous);
+  await previous.return();
+  const nextSignal = new AbortController().signal;
+  const second = await drain(collectOrders(api, options, nextSignal));
+  expect(second[0]!.order.order_sn).toBe("261017-b");
+  expect(api.getOrders).toHaveBeenNthCalledWith(2, null, 10, nextSignal);
 });
