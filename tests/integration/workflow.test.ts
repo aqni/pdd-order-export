@@ -81,12 +81,24 @@ test("reviewed pages cross protocol validation, collection and both export forma
   expect(result.map((entry) => entry.detail)).toEqual(
     sample.entries.map((entry) => entry.detail),
   );
-  expect(JSON.parse(await exportFile(result, "json").blob.text())).toEqual(
-    result,
-  );
-  expect(await exportFile(result, "csv").blob.text()).toContain(
-    result[0]!.order.order_sn,
-  );
+  expect(
+    JSON.parse(
+      await exportFile(
+        result,
+        "json",
+        options.startDate,
+        options.endDate,
+      ).blob.text(),
+    ),
+  ).toEqual(result);
+  expect(
+    await exportFile(
+      result,
+      "csv",
+      options.startDate,
+      options.endDate,
+    ).blob.text(),
+  ).toContain(result[0]!.order.order_sn);
   expect(fetcher).toHaveBeenCalledTimes(6);
 });
 

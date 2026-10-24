@@ -4,18 +4,21 @@ import { createAssert, type tags } from "typia";
 import { unparse } from "papaparse";
 
 /**
- * 从收集结果生成文件，不修改原始数据。
+ * 从收集结果生成文件，按本次收集的日期范围命名，不修改原始数据。
  * @throws CSV 字段不符合模型时抛出 Typia 详细错误；JSON 不做 CSV 校验。
  */
 export function exportFile(
   entries: readonly CollectedOrder[],
   format: FileFormat,
+  startDate: Date | null,
+  endDate: Date | null,
   partial = false,
 ): { name: string; blob: Blob } {
-  const date = new Date().toISOString().slice(0, 10);
+  const start = startDate?.toISOString().slice(0, 10) ?? "不限";
+  const end = endDate?.toISOString().slice(0, 10) ?? "不限";
   const { encode, type } = formats[format];
   return {
-    name: `拼多多账单_${date}${partial ? "_不完整" : ""}.${format}`,
+    name: `拼多多账单_${start}至${end}${partial ? "_不完整" : ""}.${format}`,
     blob: new Blob(encode(entries), { type }),
   };
 }

@@ -1,5 +1,5 @@
 import { Component, createElement } from "preact";
-import type { CollectedOrder } from "../../collect";
+import type { CollectResult } from "../collect/controls";
 import { downloadFile, exportFile } from "../../export";
 
 /** 拥有导出按钮及文件操作；失败使用原生提示，不依赖收集任务状态。 */
@@ -22,9 +22,10 @@ export class ExportActions extends Component<ExportActionsProps> {
 
   #disposed = false;
 
-  render({ entries, partial }: ExportActionsProps) {
+  render({ result }: ExportActionsProps) {
+    const { entries, partial } = result;
     return (
-      <div class="exports" hidden={!entries?.length}>
+      <div class="exports" hidden={!entries.length}>
         {ExportActions.#formats.map(({ format, description }) => (
           <button
             key={format}
@@ -44,12 +45,12 @@ export class ExportActions extends Component<ExportActionsProps> {
   }
 
   #export(format: FileFormat): void {
-    const { entries, partial } = this.props;
-    if (this.#disposed || !entries?.length) return;
+    const { entries, partial, startDate, endDate } = this.props.result;
+    if (this.#disposed || !entries.length) return;
     let file;
     try {
       // CSV 校验失败不影响原始 JSON 备份。
-      file = exportFile(entries, format, partial);
+      file = exportFile(entries, format, startDate, endDate, partial);
     } catch {
       globalThis.alert(
         format === "csv"
@@ -69,6 +70,5 @@ export class ExportActions extends Component<ExportActionsProps> {
 type FileFormat = Parameters<typeof exportFile>[1];
 
 interface ExportActionsProps {
-  entries: readonly CollectedOrder[] | null;
-  partial: boolean;
+  result: CollectResult;
 }

@@ -19,7 +19,7 @@ export function ExportControls({ result }: ExportControlsProps) {
         {`已收集 ${entries.length} 笔订单 · 详情 ${details} 笔`}
       </p>
       <p>{`结果日期：${formatDate(startDate)} 至 ${formatDate(endDate)}`}</p>
-      <ExportActions entries={entries} partial={partial} />
+      <ExportActions result={result} />
     </section>
   );
 }

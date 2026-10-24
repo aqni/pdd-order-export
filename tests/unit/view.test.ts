@@ -133,7 +133,13 @@ test("collection preserves settings and requires an explicit export interaction"
   expect(input("pageSize").value).toBe("30");
   expect(collection.collectOrders).toHaveBeenCalledOnce();
   action("导出 JSON").click();
-  expect(files.exportFile).toHaveBeenCalledWith(result, "json", false);
+  expect(files.exportFile).toHaveBeenCalledWith(
+    result,
+    "json",
+    null,
+    null,
+    false,
+  );
   expect(files.downloadFile).toHaveBeenCalledOnce();
   view.dispose();
   view.dispose();
@@ -400,6 +406,8 @@ test("cancel preserves a successful detail arriving after the abort", async () =
   expect(files.exportFile).toHaveBeenCalledWith(
     [{ order, detail: { orderSn: order.order_sn } }],
     "json",
+    null,
+    null,
     true,
   );
   expect(PddClient.prototype.getOrders).toHaveBeenCalledOnce();
@@ -439,7 +447,13 @@ test("a CSV failure uses a native alert and JSON retry retains the result", asyn
   expect(files.downloadFile).not.toHaveBeenCalled();
   action("导出 JSON").click();
   expect(globalThis.alert).toHaveBeenCalledOnce();
-  expect(files.exportFile).toHaveBeenLastCalledWith(result, "json", false);
+  expect(files.exportFile).toHaveBeenLastCalledWith(
+    result,
+    "json",
+    null,
+    null,
+    false,
+  );
   expect(files.downloadFile).toHaveBeenCalledOnce();
   expect(collection.collectOrders).toHaveBeenCalledOnce();
 });
@@ -497,7 +511,13 @@ test("a failed session retry retains the result and fresh collection clears the 
   expect(exports()?.hidden ?? true).toBe(false);
   expect(collection.collectOrders).toHaveBeenCalledOnce();
   action("导出 JSON").click();
-  expect(files.exportFile).toHaveBeenLastCalledWith(result, "json", false);
+  expect(files.exportFile).toHaveBeenLastCalledWith(
+    result,
+    "json",
+    null,
+    null,
+    false,
+  );
   document.cookie = "pdd_user_id=123; path=/";
   native.requestSubmit();
   await vi.waitFor(() =>

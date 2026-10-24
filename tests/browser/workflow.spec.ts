@@ -178,7 +178,7 @@ test("installed userscript collects first and exports only on request", async ({
   await dialog.getByRole("button", { name: "导出 CSV", exact: true }).click();
   const csv = await file(await csvDownload);
   expect([...csv.bytes.subarray(0, 3)]).toEqual([239, 187, 191]);
-  expect(csv.name).toMatch(/^拼多多账单_\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(csv.name).toBe("拼多多账单_不限至不限.csv");
   const parsed = Papa.parse<{ 订单编号: string }>(csv.bytes.toString(), {
     header: true,
   });
@@ -252,7 +252,11 @@ test("recollection validates drafts before replacing the result and keeps the ne
   await dialog
     .getByRole("button", { name: "导出部分 JSON", exact: true })
     .click();
-  const exported = JSON.parse((await file(await download)).bytes.toString());
+  const exportedFile = await file(await download);
+  expect(exportedFile.name).toBe(
+    "拼多多账单_2026-10-17至2026-10-17_不完整.json",
+  );
+  const exported = JSON.parse(exportedFile.bytes.toString());
   expect(Array.isArray(exported)).toBe(true);
   await page.setViewportSize({ width: 320, height: 568 });
   expect(

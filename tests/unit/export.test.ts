@@ -44,7 +44,7 @@ test.each(cases)(
     const partial = !legacy.complete;
     const before = structuredClone(input);
     if (success) {
-      const actual = exportFile(input, "csv", partial);
+      const actual = exportFile(input, "csv", null, null, partial);
       expect(actual.blob.type).toBe("text/csv;charset=utf-8");
       const bytes = Buffer.from(await actual.blob.arrayBuffer());
       const expected = readFileSync(join(directory, "exported.csv"), "utf8");
@@ -57,7 +57,7 @@ test.each(cases)(
       // Resolve the error as data so a successful export also fails these assertions.
       const error: unknown = (() => {
         try {
-          return exportFile(input, "csv", partial);
+          return exportFile(input, "csv", null, null, partial);
         } catch (error) {
           return error;
         }
@@ -69,10 +69,49 @@ test.each(cases)(
       expect(error).toMatchObject(expected);
     }
     expect(input).toEqual(before);
-    const json = exportFile(input, "json", partial);
+    const json = exportFile(input, "json", null, null, partial);
     expect(json.blob.type).toBe("application/json;charset=utf-8");
     expect(json.name.endsWith(partial ? "_不完整.json" : ".json")).toBe(true);
     expect(JSON.parse(await json.blob.text())).toEqual(before);
+  },
+);
+
+test.each([
+  {
+    start: "2026-10-01",
+    end: "2026-10-17",
+    partial: false,
+    expected: "拼多多账单_2026-10-01至2026-10-17",
+  },
+  {
+    start: "2026-10-01",
+    end: "",
+    partial: false,
+    expected: "拼多多账单_2026-10-01至不限",
+  },
+  {
+    start: "",
+    end: "2026-10-17",
+    partial: false,
+    expected: "拼多多账单_不限至2026-10-17",
+  },
+  { start: "", end: "", partial: false, expected: "拼多多账单_不限至不限" },
+  {
+    start: "2026-10-17",
+    end: "2026-10-17",
+    partial: true,
+    expected: "拼多多账单_2026-10-17至2026-10-17_不完整",
+  },
+])(
+  "file names use collection dates: $expected",
+  ({ start, end, partial, expected }) => {
+    const startDate = start ? new Date(start) : null;
+    const endDate = end ? new Date(end) : null;
+    for (const format of ["csv", "json"] as const) {
+      expect(exportFile([], format, startDate, endDate, partial).name).toBe(
+        `${expected}.${format}`,
+      );
+    }
   },
 );
 
