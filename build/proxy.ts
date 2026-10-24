@@ -14,24 +14,24 @@ const siteProxy = {
     cookieDomainRewrite: "",
     proxyTimeout: 30_000,
     configure(proxy, options) {
+      const target = new URL(String(options.target));
       proxy.on("proxyReq", (proxyReq, req) => {
-        const target = String(options.target);
-        if (req.headers.origin) proxyReq.setHeader("origin", target);
+        if (req.headers.origin) proxyReq.setHeader("origin", target.origin);
         const localOrigin = `http://${req.headers.host}`;
         const referer = req.headers.referer;
         if (referer?.startsWith(localOrigin + "/")) {
           proxyReq.setHeader(
             "referer",
-            target + referer.slice(localOrigin.length),
+            target.origin + referer.slice(localOrigin.length),
           );
         }
       });
-      proxy.on("proxyRes", (response) => {
+      proxy.on("proxyRes", (response, req) => {
         response.headers["cache-control"] = "no-store";
         const location = response.headers.location;
         if (location) {
-          const target = new URL(String(options.target));
-          const redirect = new URL(location, target);
+          const request = new URL(req.url ?? "/", target);
+          const redirect = new URL(location, request);
           if (redirect.origin === target.origin) {
             response.headers.location =
               redirect.pathname + redirect.search + redirect.hash;

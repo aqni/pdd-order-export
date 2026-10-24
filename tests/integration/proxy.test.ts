@@ -8,20 +8,20 @@ import { createServer, preview } from "vite";
 
 test("proxy mode forwards every path independently of the artifact preview", async () => {
   const requests: { path: string; origin?: string; referer?: string }[] = [];
+  const redirects = new Map([["/redirect", "/orders.html?from=redirect"]]);
   const upstream = httpServer((request, response) => {
     requests.push({
       path: request.url!,
       origin: request.headers.origin,
       referer: request.headers.referer,
     });
+    const location = redirects.get(request.url!);
     response
-      .writeHead(request.url === "/redirect" ? 302 : 200, {
+      .writeHead(location ? 302 : 200, {
         "content-type": "text/plain",
         "set-cookie":
           "session=synthetic; Domain=mobile.pinduoduo.com; Path=/; HttpOnly",
-        ...(request.url === "/redirect"
-          ? { location: "/orders.html?from=redirect" }
-          : {}),
+        ...(location ? { location } : {}),
       })
       .end("synthetic response");
   });
@@ -100,6 +100,21 @@ test("proxy mode forwards every path independently of the artifact preview", asy
     });
     expect(redirect.status).toBe(302);
     expect(redirect.headers.get("location")).toBe("/orders.html?from=redirect");
+    for (const [location, expected] of [
+      ["login", "/account/login"],
+      ["?step=2", "/account/verify?step=2"],
+      [
+        "https://outside.invalid/login?continue=1#done",
+        "https://outside.invalid/login?continue=1#done",
+      ],
+    ] as const) {
+      redirects.set("/account/verify?step=1", location);
+      const response = await fetch(base + "/account/verify?step=1", {
+        redirect: "manual",
+      });
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe(expected);
+    }
     expect(await (await fetch(base + "/orders.html")).text()).toBe(
       "synthetic response",
     );
@@ -113,6 +128,9 @@ test("proxy mode forwards every path independently of the artifact preview", asy
     expect(requests.map((request) => request.path)).toEqual([
       "/proxy/api/orders?size=10",
       "/redirect",
+      "/account/verify?step=1",
+      "/account/verify?step=1",
+      "/account/verify?step=1",
       "/orders.html",
       "/",
       "/pdd-order-export.user.js",
