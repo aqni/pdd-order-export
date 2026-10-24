@@ -91,12 +91,11 @@ const isSingleUserId = createIs<[UserId]>();
 
 function parseUserId(cookies: string): UserId {
   try {
-    const values = new Set<string>();
-    for (const [, value = ""] of cookies.matchAll(
-      /(?:^|;)\s*pdd_user_id=([^;]*)/g,
-    )) {
-      values.add(decodeURIComponent(value.trim()));
-    }
+    const values = new Set(
+      cookies
+        .matchAll(/(?:^|;)\s*pdd_user_id=([^;]*)/g)
+        .map(([, value = ""]) => decodeURIComponent(value.trim())),
+    );
     const ids = [...values];
     if (isSingleUserId(ids)) {
       return ids[0];

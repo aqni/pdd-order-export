@@ -13,6 +13,7 @@ import {
 } from "playwright";
 import pin from "./tampermonkey.json" with { type: "json" };
 import { createShop } from "./shop";
+import { installedVersion, resolveLibrary } from "../../build/libraries";
 
 export { expect };
 export const test = base.extend<{ shop: Awaited<ReturnType<typeof openShop>> }>(
@@ -35,7 +36,11 @@ export const test = base.extend<{ shop: Awaited<ReturnType<typeof openShop>> }>(
 const require = createRequire(import.meta.url);
 const origin = "https://mobile.pinduoduo.com";
 
-async function install(context: BrowserContext, extensionId: string) {
+async function install(
+  context: BrowserContext,
+  extensionId: string,
+  standalone: boolean,
+) {
   const installer = await context.newPage();
   await installer.goto("chrome://extensions/?id=" + extensionId);
   await installer.evaluate(async (id) => {
@@ -82,7 +87,11 @@ async function install(context: BrowserContext, extensionId: string) {
     }),
     installer
       .locator("input[type=file]")
-      .setInputFiles("dist/pdd-order-export.user.js"),
+      .setInputFiles(
+        standalone
+          ? "dist/pdd-order-export.standalone.user.js"
+          : "dist/pdd-order-export.user.js",
+      ),
   ]);
   await Promise.all([
     confirmation.waitForEvent("close"),
@@ -93,6 +102,7 @@ async function install(context: BrowserContext, extensionId: string) {
 
 /** Actual Tampermonkey install in a disposable profile, with every network path intercepted or denied. */
 async function openShop(testInfo: TestInfo) {
+  const standalone = testInfo.project.name === "standalone";
   const shop = createShop();
   const { fixture, release } = shop;
   const loaded = new Set<string>();
@@ -102,14 +112,18 @@ async function openShop(testInfo: TestInfo) {
     ["papaparse", "papaparse.min.js"],
     ["acorn", "dist/acorn.js"],
     ["wretch", "dist/bundle/wretch.min.js"],
-    ["preact", "dist/preact.umd.js"],
   ]) {
+    if (standalone) break;
     const packagePath = require.resolve(name + "/package.json");
     const { version } = require(packagePath);
     dependencies.set(
       "https://cdn.jsdelivr.net/npm/" + name + "@" + version + "/" + file,
       await readFile(join(dirname(packagePath), file!), "utf8"),
     );
+  }
+  if (!standalone) {
+    const lit = await resolveLibrary(601930, "lit", installedVersion("lit"));
+    dependencies.set(new URL(lit.url).href, lit.source);
   }
   const extension = resolve("node_modules/.cache/tampermonkey", pin.version);
   assert.equal(
@@ -224,7 +238,7 @@ async function openShop(testInfo: TestInfo) {
     const worker =
       context.serviceWorkers()[0] ??
       (await context.waitForEvent("serviceworker"));
-    await install(context, new URL(worker.url()).host);
+    await install(context, new URL(worker.url()).host, standalone);
     await context.addCookies([
       { name: "pdd_user_id", value: shop.uid, url: origin },
     ]);
@@ -245,6 +259,7 @@ async function openShop(testInfo: TestInfo) {
         name: "订单导出",
         includeHidden: true,
       }),
+      panel: page.locator("pdd-export-dialog"),
       async file(download: Download) {
         assert.equal(await download.failure(), null);
         const path = await download.path();

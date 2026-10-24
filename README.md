@@ -4,9 +4,11 @@
 
 ## 安装
 
-支持近期版本的 Edge、Chrome。安装 Tampermonkey 后，从 [Greasy Fork](https://greasyfork.org/zh-CN/scripts/581924) 安装脚本。
+支持 Edge、Chrome 136+。安装 Tampermonkey 后，从 [Greasy Fork](https://greasyfork.org/zh-CN/scripts/581924) 安装脚本。
 
-登录订单页，点击「导出账单」。范围设置、收集进度与导出选项均在面板内。
+登录订单页，点击「导出账单」。入口按钮可拖动调整位置，范围设置、收集进度与导出选项均在面板内。
+
+点击「收起」或按 Esc 只收起面板，收集会继续运行；再次点击「导出账单」可查看进度和结果。需要中止时，点击「停止并保留结果」。
 
 ## 开发
 

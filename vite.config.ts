@@ -3,11 +3,13 @@ import ttsc from "@ttsc/unplugin/vite";
 import monkey, { cdn } from "vite-plugin-monkey";
 import proxyConfig from "./build/proxy.ts";
 import { getUserscriptVersion } from "./build/version.ts";
+import { resolveLibrary } from "./build/libraries.ts";
 
 export default defineConfig(({ mode, command, isPreview }) => {
   if (mode === "proxy" && command === "serve" && !isPreview) {
     return proxyConfig;
   }
+  const standalone = mode === "standalone";
   return {
     server: { host: "127.0.0.1", port: 5173, strictPort: true },
     preview: {
@@ -19,12 +21,12 @@ export default defineConfig(({ mode, command, isPreview }) => {
     // 避免依赖扫描阶段再次触发应用 TypeScript 的 Typia 编译。
     optimizeDeps: {
       noDiscovery: true,
-      include: ["papaparse", "acorn", "wretch", "typia", "preact"],
+      include: ["papaparse", "acorn", "wretch", "typia", "lit"],
     },
     build: {
-      target: "es2022",
+      target: "chrome136",
+      emptyOutDir: !standalone,
       minify: false,
-      cssMinify: false,
       rolldownOptions: {
         output: { comments: { legal: true, jsdoc: true, annotation: false } },
       },
@@ -35,16 +37,28 @@ export default defineConfig(({ mode, command, isPreview }) => {
       monkey({
         entry: "src/main.ts",
         build: {
-          externalGlobals: {
-            preact: cdn.jsdelivr("preact", "dist/preact.umd.js"),
-            papaparse: cdn.jsdelivr("Papa", "papaparse.min.js"),
-            acorn: cdn.jsdelivr("acorn", "dist/acorn.js"),
-            wretch: cdn.jsdelivr("wretch", "dist/bundle/wretch.min.js"),
-          },
+          fileName: standalone
+            ? "pdd-order-export.standalone.user.js"
+            : "pdd-order-export.user.js",
+          externalGlobals: standalone
+            ? {}
+            : {
+                lit: [
+                  async (version, name) =>
+                    (await resolveLibrary(601930, name, version)).globalName,
+                  async (version, name) =>
+                    (await resolveLibrary(601930, name, version)).url,
+                ],
+                papaparse: cdn.jsdelivr("Papa", "papaparse.min.js"),
+                acorn: cdn.jsdelivr("acorn", "dist/acorn.js"),
+                wretch: cdn.jsdelivr("wretch", "dist/bundle/wretch.min.js"),
+              },
         },
         userscript: {
           version: getUserscriptVersion(process.cwd()),
-          name: "拼多多订单导出工具",
+          name: standalone
+            ? "拼多多订单导出工具（独立版）"
+            : "拼多多订单导出工具",
           namespace: "http://tampermonkey.net/",
           author: "aqnin@outlook.com",
           icon: "https://www.google.com/s2/favicons?sz=64&domain=pinduoduo.com",

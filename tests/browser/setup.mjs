@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { unzipSync } from "fflate";
+import pin from "./tampermonkey.json" with { type: "json" };
 
 export default async function setup() {
   const require = createRequire(import.meta.url);
@@ -26,9 +27,6 @@ export default async function setup() {
       ],
       { stdio: "inherit" },
     );
-  const pin = JSON.parse(
-    await readFile(new URL("./tampermonkey.json", import.meta.url), "utf8"),
-  );
   const cache = resolve("node_modules/.cache/tampermonkey");
   await mkdir(cache, { recursive: true });
   const archivePath = resolve(cache, `${pin.version}.crx`);
@@ -44,7 +42,7 @@ export default async function setup() {
       throw new Error(`Tampermonkey download failed: ${response.status}`);
     archive = Buffer.from(await response.arrayBuffer());
   }
-  if (createHash("sha256").update(archive).digest("hex") !== pin.sha256) {
+  if (hash("sha256", archive, "hex") !== pin.sha256) {
     throw new Error(
       "Tampermonkey package changed. Review the official release and update tests/browser/tampermonkey.json.",
     );

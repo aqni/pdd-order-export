@@ -15,10 +15,7 @@ export function createShop() {
     requests: [] as { method: string; path: string; body: unknown }[],
     errors: [] as string[],
   };
-  let release!: () => void;
-  const gate = new Promise<void>((done) => {
-    release = done;
-  });
+  const { promise: gate, resolve: release } = Promise.withResolvers<void>();
   return {
     fixture,
     release,

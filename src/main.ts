@@ -1,21 +1,9 @@
-import { createElement, render } from "preact";
 import { ExportPanel } from "./ui";
-import stylesheet from "./ui/styles.css?style";
-
 const hostId = "pdd-order-export";
-
 // @run-at document-end 保证 DOM 已解析。
 if (!document.getElementById(hostId)) {
-  const host = document.createElement("div");
-  const mountNode = document.createElement("div");
-  const shadow = host.attachShadow({ mode: "open" });
-  shadow.append(stylesheet.cloneNode(true), mountNode);
-  host.id = hostId;
-  render(createElement(ExportPanel, {}), mountNode);
-  document.body.append(host);
-  import.meta.hot?.dispose(() => {
-    render(null, mountNode);
-    shadow.replaceChildren();
-    host.remove();
-  });
+  const panel = new ExportPanel();
+  panel.id = hostId;
+  document.body.append(panel);
 }
+// 自定义元素不能重复注册，不接受模块热替换，由 Vite 整页刷新。

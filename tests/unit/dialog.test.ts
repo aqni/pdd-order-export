@@ -1,55 +1,37 @@
 // @vitest-environment jsdom
 import { expect, test, vi } from "vitest";
-import { createElement, render } from "preact";
 import { ExportDialog } from "../../src/ui/dialog";
 
-test("dialog owns dismissal and focus without task state, and ignores stale close events", () => {
-  const host = document.createElement("div");
-  document.body.append(host);
-  const onDismiss = vi.fn();
-  render(
-    createElement(ExportDialog, {
-      running: false,
-      children: "内容",
-      onDismiss,
-    }),
-    host,
-  );
+test("dialog binds its native invoker across Shadow Roots and closes on disposal", async () => {
+  const element = new ExportDialog();
+  element.textContent = "内容";
+  document.body.append(element);
+  await element.updateComplete;
+  const host = element.shadowRoot!;
   const dialog = host.querySelector("dialog")!;
-  const launcher = host.querySelector<HTMLButtonElement>(".launcher")!;
-  // jsdom 不实现原生弹层行为；浏览器测试覆盖真实关闭事件及焦点。
-  dialog.showModal = () => {
-    dialog.open = true;
-  };
-  dialog.close = () => {
+  const launcher = host.querySelector("pdd-export-launcher")!;
+  await launcher.updateComplete;
+  const launchButton = launcher.shadowRoot!.querySelector("button")!;
+  // jsdom 不实现命令按钮和模态行为；真实点击、Esc、焦点由浏览器测试覆盖。
+  dialog.close = vi.fn(() => {
     dialog.open = false;
-    dialog.dispatchEvent(new Event("close"));
-  };
+  });
   try {
-    launcher.click();
-    dialog.querySelector("button")!.click();
-    expect(onDismiss).toHaveBeenCalledOnce();
-    expect(document.activeElement).toBe(launcher);
-    expect(launcher.hidden).toBe(false);
-
-    launcher.click();
-    dialog.dispatchEvent(new Event("cancel"));
-    dialog.close();
-    expect(onDismiss).toHaveBeenCalledTimes(2);
-
-    launcher.click();
-    dialog.dispatchEvent(new Event("close"));
+    expect(launchButton.getAttribute("command")).toBe("show-modal");
+    expect(launchButton.commandForElement).toBe(dialog);
+    dialog.open = true;
+    element.remove();
+    document.body.append(element);
+    await Promise.resolve();
+    expect(dialog.close).not.toHaveBeenCalled();
     expect(dialog.open).toBe(true);
-    expect(launcher.hidden).toBe(true);
-    expect(onDismiss).toHaveBeenCalledTimes(2);
-    dialog.close();
-    expect(onDismiss).toHaveBeenCalledTimes(3);
-
-    launcher.click();
-    render(null, host);
-    expect(onDismiss).toHaveBeenCalledTimes(3);
+    element.dispose();
+    expect(dialog.close).toHaveBeenCalledOnce();
+    expect(dialog.open).toBe(false);
+    host.replaceChildren();
   } finally {
-    render(null, host);
-    host.remove();
+    element.dispose();
+    host.replaceChildren();
+    element.remove();
   }
 });

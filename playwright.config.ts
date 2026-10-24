@@ -4,4 +4,5 @@ export default defineConfig({
   testDir: "./tests/browser",
   globalSetup: "./tests/browser/setup.mjs",
   outputDir: "test-results/browser",
+  projects: [{ name: "external" }, { name: "standalone" }],
 });
