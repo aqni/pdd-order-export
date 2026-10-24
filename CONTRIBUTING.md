@@ -2,7 +2,7 @@
 
 ## 开发
 
-使用 Node.js 22.15+（22 系列）、24 系列或 26+，以及 Chrome／Edge 131+。构建版本由 Git 推导，克隆时保留完整历史和 tags。
+使用 Node.js 24 系列，以及 Chrome／Edge 131+。构建版本由 Git 推导，克隆时保留完整历史和 tags。
 
 ```sh
 npm ci
