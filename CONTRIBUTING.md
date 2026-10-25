@@ -22,7 +22,7 @@ npm run build
 npm run preview
 ```
 
-产物位于 `dist/`，不压缩、经 Prettier 排版，不提交到仓库；保留许可证和 JSDoc，移除优化注解。运行时依赖由 `vite.config.ts` 的 `externalGlobals` 加载固定版本的官方浏览器产物。安装时保留可选依赖，不使用 `--omit=optional`。
+产物位于 `dist/`，经 Prettier 排版，不提交到仓库。运行时依赖由 `vite.config.ts` 的 `externalGlobals` 加载固定版本的官方浏览器产物。安装时保留可选依赖，不使用 `--omit=optional`。
 
 `src/pdd.ts` 处理协议，`src/collect.ts` 负责收集，`src/export.ts` 生成文件。`src/ui/` 使用 Preact 和 TSX，按收集、导出、弹层划分职责。表单拥有草稿，收集区域拥有任务与进度，入口将结果快照传给导出区域。
 

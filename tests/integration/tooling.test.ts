@@ -1,7 +1,6 @@
 import { afterEach, test, expect, vi } from "vitest";
 import { createServer } from "vite";
 import { glob } from "node:fs/promises";
-import type { AddressInfo } from "node:net";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -15,8 +14,7 @@ test("the development server serves an installer and compiled modules without a 
   });
   try {
     await server.listen();
-    const base =
-      "http://127.0.0.1:" + (server.httpServer!.address() as AddressInfo).port;
+    const base = server.resolvedUrls!.local[0]!.replace(/\/$/, "");
     expect(Object.keys(server.config.server.proxy ?? {})).toEqual([]);
     const installer = await (
       await fetch(base + "/__vite-plugin-monkey.install.user.js")

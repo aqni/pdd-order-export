@@ -8,6 +8,7 @@ import type { CollectedOrder } from "../../src/collect";
 
 beforeEach(() => vi.stubGlobal("Blob", NodeBlob));
 afterEach(() => {
+  vi.restoreAllMocks();
   document.body.replaceChildren();
   vi.clearAllTimers();
   vi.useRealTimers();

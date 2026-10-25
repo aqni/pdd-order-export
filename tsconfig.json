@@ -15,7 +15,6 @@
     "noUnusedParameters": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "allowImportingTsExtensions": true,
     "skipLibCheck": true
   },
   "include": ["src", "tests", "*.config.ts"]

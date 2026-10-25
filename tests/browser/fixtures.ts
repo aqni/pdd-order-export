@@ -38,14 +38,21 @@ const origin = "https://mobile.pinduoduo.com";
 export async function install(
   context: BrowserContext,
   extensionId: string,
+  testInfo: TestInfo,
   scriptPath = "dist/pdd-order-export.user.js",
 ) {
   const installer = await context.newPage();
   await installer.goto("chrome://extensions/?id=" + extensionId);
+  // 授权后重建扩展上下文，避免首次启动缓存未授权的 userScripts API。
+  const restarted = context.waitForEvent("serviceworker", {
+    predicate: (worker) =>
+      worker.url().startsWith("chrome-extension://" + extensionId + "/"),
+  });
   await installer.evaluate(async (id) => {
     const browser = globalThis as unknown as {
       chrome: {
         developerPrivate: {
+          reload(extensionId: string): Promise<void>;
           updateExtensionConfiguration(options: {
             extensionId: string;
             userScriptsAccess: boolean;
@@ -57,28 +64,59 @@ export async function install(
       extensionId: id,
       userScriptsAccess: true,
     });
+    await browser.chrome.developerPrivate.reload(id);
   }, extensionId);
+  await restarted;
   await installer.goto("chrome-extension://" + extensionId + "/options.html");
-  // 首次启动可能早于权限开启；等扩展注册注入脚本，避免错过首个文档。
-  await expect
-    .poll(
-      () =>
-        installer.evaluate(async () => {
-          const browser = globalThis as unknown as {
-            chrome: {
-              userScripts: {
-                getScripts(): Promise<{ js?: { file?: string }[] }[]>;
+  const started = Date.now();
+  const checks: { elapsedMs: number; scripts: string[]; error?: string }[] = [];
+  try {
+    await expect
+      .poll(
+        async () => {
+          const state = await installer.evaluate(async () => {
+            const browser = globalThis as unknown as {
+              chrome: {
+                userScripts?: {
+                  getScripts(): Promise<{ js?: { file?: string }[] }[]>;
+                };
               };
             };
-          };
-          const scripts = await browser.chrome.userScripts.getScripts();
-          return scripts.flatMap((script) =>
-            (script.js ?? []).map((source) => source.file),
-          );
-        }),
-      { message: "Tampermonkey injection scripts must be registered" },
-    )
-    .toEqual(expect.arrayContaining(["page.js", "content.js"]));
+            try {
+              if (!browser.chrome.userScripts) {
+                throw new Error("userScripts API is unavailable");
+              }
+              const scripts = await browser.chrome.userScripts.getScripts();
+              return {
+                scripts: scripts.flatMap((script) =>
+                  (script.js ?? []).flatMap((source) =>
+                    source.file ? [source.file] : [],
+                  ),
+                ),
+              };
+            } catch (error) {
+              return { scripts: [], error: String(error) };
+            }
+          });
+          checks.push({ elapsedMs: Date.now() - started, ...state });
+          return state.scripts;
+        },
+        {
+          message: "Tampermonkey injection scripts must be registered",
+          timeout: 15_000,
+        },
+      )
+      .toEqual(expect.arrayContaining(["page.js", "content.js"]));
+  } finally {
+    await testInfo.attach("tampermonkey-readiness", {
+      body: JSON.stringify(
+        { elapsedMs: Date.now() - started, checks },
+        null,
+        2,
+      ),
+      contentType: "application/json",
+    });
+  }
   await installer.getByText(/^(Utilities|实用工具)$/).click();
   const [confirmation] = await Promise.all([
     context.waitForEvent("page", {
@@ -231,7 +269,7 @@ async function openShop(testInfo: TestInfo) {
     const worker =
       context.serviceWorkers()[0] ??
       (await context.waitForEvent("serviceworker"));
-    await install(context, new URL(worker.url()).host);
+    await install(context, new URL(worker.url()).host, testInfo);
     await context.addCookies([
       { name: "pdd_user_id", value: shop.uid, url: origin },
     ]);

@@ -4,26 +4,6 @@ import monkey, { cdn } from "vite-plugin-monkey";
 import { versionFromGitTag } from "absolute-version";
 
 export default defineConfig({
-  server: {
-    host: "127.0.0.1",
-    strictPort: true,
-  },
-  preview: {
-    cors: false,
-  },
-  // 避免依赖扫描阶段再次触发应用 TypeScript 的 Typia 编译。
-  optimizeDeps: {
-    noDiscovery: true,
-    include: ["papaparse", "acorn", "wretch", "typia", "preact"],
-  },
-  build: {
-    target: "chrome136",
-    minify: false,
-    cssMinify: false,
-    rolldownOptions: {
-      output: { comments: { legal: true, jsdoc: true, annotation: false } },
-    },
-  },
   // monkey 处理最终用户脚本包装，放在源码转换插件之后。
   plugins: [
     ttsc(),
