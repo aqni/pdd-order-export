@@ -21,7 +21,7 @@ export function CollectProgress({ cancelling, counts }: CollectProgressProps) {
         value={determinate ? page.completed : undefined}
         max={determinate ? page.total : undefined}
       />
-      <p class="counts">
+      <p>
         {counts &&
           `已读 ${counts.pages} 页 · 保留 ${counts.orders} 笔 · 详情 ${counts.details} 笔`}
       </p>

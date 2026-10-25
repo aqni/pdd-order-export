@@ -51,89 +51,28 @@ test("stylesheet scopes stop at child regions and native fields keep form owners
   ).toBe("收集设置");
 });
 
-test("the launcher drags without opening, stays in the viewport and remains keyboard accessible", async ({
+test("the fixed launcher stays in the viewport and remains keyboard accessible", async ({
   shop,
 }) => {
   const { page } = shop;
   await shop.panel.getByRole("button", { name: "收起", exact: true }).click();
   const launcher = page.getByRole("button", { name: "导出账单", exact: true });
-  const initial = (await launcher.boundingBox())!;
-  await page.mouse.move(
-    initial.x + initial.width / 2,
-    initial.y + initial.height / 2,
-  );
-  await page.mouse.down();
-  await page.mouse.move(200, 180, { steps: 5 });
-  await page.mouse.up();
-  await expect(shop.dialog).toBeHidden();
-  const moved = (await launcher.boundingBox())!;
-  expect(moved.x).toBeCloseTo(200 - initial.width / 2, 0);
-  expect(moved.y).toBeCloseTo(180 - initial.height / 2, 0);
-
-  await launcher.click();
-  await expect(shop.dialog).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(launcher).toBeFocused();
-  expect(await launcher.boundingBox()).toEqual(moved);
-
-  await page.mouse.move(moved.x + moved.width / 2, moved.y + moved.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(1260, 700, { steps: 5 });
-  await page.mouse.up();
-  await page.setViewportSize({ width: 320, height: 568 });
-  await expect
-    .poll(async () => {
-      const bounds = (await launcher.boundingBox())!;
-      return (
-        bounds.x >= 0 &&
-        bounds.y >= 0 &&
-        bounds.x + bounds.width <= 320 &&
-        bounds.y + bounds.height <= 568
-      );
-    })
-    .toBe(true);
-  await expect(shop.dialog).toBeHidden();
+  for (const width of [1000, 320]) {
+    await page.setViewportSize({ width, height: 568 });
+    const bounds = (await launcher.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeCloseTo(width - 16, 0);
+    expect(bounds.y + bounds.height).toBeCloseTo(548, 0);
+  }
   await launcher.focus();
   await page.keyboard.press("Enter");
   await expect(shop.dialog).toBeVisible();
-});
-
-test("the launcher also supports native touch dragging and tapping", async ({
-  shop,
-}) => {
-  const { page, context } = shop;
-  await page.setViewportSize({ width: 390, height: 844 });
-  await shop.panel.getByRole("button", { name: "收起", exact: true }).click();
-  const launcher = page.getByRole("button", { name: "导出账单", exact: true });
-  const bounds = (await launcher.boundingBox())!;
-  const session = await context.newCDPSession(page);
-  try {
-    // 完整手势避免瞬间跨越整屏触发浏览器的 fling/tap 抑制。
-    await session.send("Input.synthesizeScrollGesture", {
-      x: bounds.x + bounds.width / 2,
-      y: bounds.y + bounds.height / 2,
-      xDistance: 140 - (bounds.x + bounds.width / 2),
-      yDistance: 160 - (bounds.y + bounds.height / 2),
-      gestureSourceType: "touch",
-      speed: 800,
-      preventFling: true,
-    });
-    await expect(shop.dialog).toBeHidden();
-    await expect
-      .poll(async () => (await launcher.boundingBox())!.x)
-      .toBeLessThan(bounds.x - 100);
-    const moved = (await launcher.boundingBox())!;
-    expect(moved.y).toBeLessThan(bounds.y - 300);
-    expect(moved.x).toBeGreaterThanOrEqual(0);
-    expect(moved.y).toBeGreaterThanOrEqual(0);
-    await page.touchscreen.tap(
-      moved.x + moved.width / 2,
-      moved.y + moved.height / 2,
-    );
-    await expect(shop.dialog).toBeVisible();
-  } finally {
-    await session.detach();
-  }
+  await expect(launcher).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(shop.dialog).toBeHidden();
+  await expect(launcher).toBeFocused();
+  await launcher.tap();
+  await expect(shop.dialog).toBeVisible();
 });
 
 test("panel dimensions stay compact when the site uses a large root font", async ({
@@ -263,7 +202,9 @@ test("starting collection from a focused field moves focus to the stop button", 
     exact: true,
   });
   await expect(stop).toBeFocused();
-  await expect(shop.panel.locator(".settings")).not.toHaveAttribute("open");
+  await expect(
+    shop.panel.locator("[data-ui=collect-settings]"),
+  ).not.toHaveAttribute("open");
   await stop.click();
 });
 

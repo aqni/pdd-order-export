@@ -20,24 +20,20 @@ export function CollectAction({
   onCancel: () => boolean;
 }) {
   return (
-    <div data-ui="collect-action">
-      <button
-        class="action"
-        form={form}
-        ref={buttonRef}
-        type={
-          status === "collecting" || status === "cancelling"
-            ? "button"
-            : "submit"
-        }
-        disabled={status === "cancelling"}
-        title={status === "complete" ? "重新收集会替换当前结果。" : ""}
-        onClick={(event) => {
-          if (onCancel()) event.preventDefault();
-        }}
-      >
-        {labels[status]}
-      </button>
-    </div>
+    <button
+      data-ui="collect-action"
+      form={form}
+      ref={buttonRef}
+      type={
+        status === "collecting" || status === "cancelling" ? "button" : "submit"
+      }
+      disabled={status === "cancelling"}
+      title={status === "complete" ? "重新收集会替换当前结果。" : ""}
+      onClick={(event) => {
+        if (onCancel()) event.preventDefault();
+      }}
+    >
+      {labels[status]}
+    </button>
   );
 }

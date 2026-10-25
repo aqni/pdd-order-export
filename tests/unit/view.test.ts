@@ -157,7 +157,9 @@ test.each([2026, 10000])(
     const endDate = `${year}-10-18`;
     const date = (day: number) => new Date(Date.UTC(year, 9, day));
     const { root, native, input, action, exports } = ui(createView());
-    const summary = root.querySelector(".settings summary small")!;
+    const summary = root.querySelector(
+      "[data-ui=collect-settings] summary small",
+    )!;
     const edit = (name: string, value: string) => {
       input(name).value = value;
       input(name).dispatchEvent(new Event("input", { bubbles: true }));
@@ -285,7 +287,9 @@ test("busy updates keep native draft nodes and submit their current values", asy
   });
   const view = createView();
   const { root, native, input, running, exports } = ui(view);
-  const action = root.querySelector<HTMLButtonElement>(".action")!;
+  const action = root.querySelector<HTMLButtonElement>(
+    "[data-ui=collect-action]",
+  )!;
   expect(action.form).toBe(native);
   expect(native.contains(action)).toBe(false);
   expect(root.querySelector("hr")!.hidden).toBe(true);
@@ -305,7 +309,7 @@ test("busy updates keep native draft nodes and submit their current values", asy
   release();
   await vi.waitFor(() => expect(exports()?.hidden ?? true).toBe(false));
   expect(root.querySelector<HTMLFormElement>("form[aria-label]")).toBe(native);
-  expect(root.querySelector(".action")).toBe(action);
+  expect(root.querySelector("[data-ui=collect-action]")).toBe(action);
   expect(action.type).toBe("submit");
   expect(action.textContent).toBe("重新收集");
   expect(input("pageSize").value).toBe("30");
@@ -316,7 +320,9 @@ test("invalid native fields prevent collection and correction restores it", asyn
   const { native, input, exports } = ui(createView());
   input("pageSize").value = "0";
   const requestSettings = input("pageSize").closest("details")!;
-  const settings = native.querySelector<HTMLDetailsElement>(".settings")!;
+  const settings = native.querySelector<HTMLDetailsElement>(
+    "[data-ui=collect-settings]",
+  )!;
   requestSettings.open = false;
   settings.open = false;
   native.requestSubmit();
@@ -386,7 +392,9 @@ test("native drafts and progress nodes survive updates and moving the view", asy
   await vi.waitFor(() => expect(root.querySelector("progress")).not.toBeNull());
   const progress = root.querySelector("progress")!;
   await vi.waitFor(() =>
-    expect(root.querySelector(".counts")!.textContent).toContain("详情 1 笔"),
+    expect(
+      root.querySelector("[data-ui=collect-progress]")!.textContent,
+    ).toContain("详情 1 笔"),
   );
   expect(progress.value).toBe(1);
   expect(progress.max).toBe(2);
@@ -466,7 +474,7 @@ test("the action button can stop a newly started task immediately", async () => 
   );
   const { root, native, running, exports } = ui(createView());
   native.requestSubmit();
-  root.querySelector<HTMLButtonElement>(".action")!.click();
+  root.querySelector<HTMLButtonElement>("[data-ui=collect-action]")!.click();
   expect(signal.aborted).toBe(true);
   await vi.waitFor(() => {
     expect(running()).toBe(false);
@@ -499,8 +507,8 @@ test("cancel preserves a successful detail arriving after the abort", async () =
   await vi.waitFor(() => expect(exports()?.hidden ?? true).toBe(false));
   expect(root.querySelector('[aria-label="收集进度"]')).toBeNull();
   expect(
-    root.querySelector('[aria-label="收集结果"] .counts')!.textContent,
-  ).toBe("已收集 1 笔订单 · 详情 1 笔");
+    root.querySelector('[data-ui="export-result"]')!.textContent,
+  ).toContain("已收集 1 笔订单 · 详情 1 笔");
   action("导出部分 JSON").click();
   expect(files.exportFile).toHaveBeenCalledWith(
     [{ order, detail: { orderSn: order.order_sn } }],

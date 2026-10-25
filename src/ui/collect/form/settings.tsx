@@ -23,7 +23,6 @@ export function CollectSettings({
   return (
     <details
       data-ui="collect-settings"
-      class="settings"
       open
       ref={detailsRef}
       onInvalidCapture={(event) => {

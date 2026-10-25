@@ -16,7 +16,7 @@ export function ExportResult({
     <div data-ui="export-result">
       <h3>收集结果</h3>
       <p role="status">{status}</p>
-      <p class="counts">{`已收集 ${entries.length} 笔订单 · 详情 ${details} 笔`}</p>
+      <p>{`已收集 ${entries.length} 笔订单 · 详情 ${details} 笔`}</p>
       <p>{`结果日期：${formatDate(startDate)} 至 ${formatDate(endDate)}`}</p>
     </div>
   );
