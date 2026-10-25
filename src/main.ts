@@ -4,6 +4,8 @@ import stylesheet from "./ui/styles.css?style";
 
 const hostId = "pdd-order-export";
 
+import.meta.hot?.accept();
+
 // @run-at document-end 保证 DOM 已解析。
 if (!document.getElementById(hostId)) {
   const host = document.createElement("div");

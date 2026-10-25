@@ -1,15 +1,15 @@
 import { defineConfig } from "vite";
 import ttsc from "@ttsc/unplugin/vite";
 import monkey, { cdn } from "vite-plugin-monkey";
-import proxyConfig from "./build/proxy.ts";
 import { versionFromGitTag } from "absolute-version";
 
-export default defineConfig(({ mode, command, isPreview }) => {
-  if (mode === "proxy" && command === "serve" && !isPreview) {
-    return proxyConfig;
-  }
+export default defineConfig(() => {
   return {
-    server: { host: "127.0.0.1", port: 5173, strictPort: true },
+    server: {
+      host: "127.0.0.1",
+      port: 5173,
+      strictPort: true,
+    },
     preview: {
       host: "127.0.0.1",
       port: 4173,

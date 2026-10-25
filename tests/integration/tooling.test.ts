@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 
 afterEach(() => vi.unstubAllEnvs());
 
-test("the real development server serves an installable script and compiled validators", async () => {
+test("the development server serves an installer and compiled modules without a site proxy", async () => {
   vi.stubEnv("BROWSER", "none");
   const server = await createServer({
     configFile: "vite.config.ts",
@@ -17,11 +17,24 @@ test("the real development server serves an installable script and compiled vali
     await server.listen();
     const base =
       "http://127.0.0.1:" + (server.httpServer!.address() as AddressInfo).port;
+    expect(Object.keys(server.config.server.proxy ?? {})).toEqual([]);
     const installer = await (
       await fetch(base + "/__vite-plugin-monkey.install.user.js")
     ).text();
     expect(installer).toMatch(/@name\s+server:/);
     expect(installer).toContain("https://mobile.pinduoduo.com/orders.html*");
+    expect(installer).not.toMatch(
+      /@match\s+http:\/\/(?:localhost|127\.0\.0\.1)/,
+    );
+    expect(await (await fetch(base + "/")).text()).toContain(
+      "__vite-plugin-monkey.install.user.js",
+    );
+    expect(await (await fetch(base + "/@vite/client")).text()).toContain(
+      "WebSocket",
+    );
+    expect(
+      await (await fetch(base + "/__vite-plugin-monkey.entry.js")).text(),
+    ).toContain("src/main.ts");
     const module = await (await fetch(base + "/src/pdd.ts")).text();
     expect(module).toContain("getOrderDetail");
     expect(module).not.toMatch(/\bassert<|\bassert\s*\(/);

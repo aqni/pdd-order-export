@@ -9,7 +9,11 @@ npm ci
 npm run dev
 ```
 
-在自动打开的页面安装开发脚本，再访问拼多多订单页。Tampermonkey 需要允许本地连接，开发版与正式版只启用一个。
+在自动打开的页面安装开发脚本，再访问[拼多多订单页](https://mobile.pinduoduo.com/orders.html)。本地页面用于安装开发脚本，面板在官网订单页运行，源码由 Vite 提供并支持热更新。Tampermonkey 和浏览器需要允许官网连接本地开发服务，开发版与正式版只启用一个。更改开发端口后需重新安装开发脚本。
+
+如果控制台提示 `Permission was denied ... loopback address space`，在拼多多订单页点击地址栏左侧的站点信息图标，进入站点权限，将“回环网络访问”（部分版本显示为“本地网络访问”）设为允许，再刷新订单页。这项权限授予 `https://mobile.pinduoduo.com`；开启代理、允许扩展访问本地文件或单独打开 `127.0.0.1:5173` 均不能替代它。开发入口由网页加载，修改 Vite 的 CORS 响应头也不能替代浏览器授权，详见 [vite-plugin-monkey 的本地网络说明](https://vite-plugin-monkey.pages.dev/guide/notes#local-network-access)。
+
+修改样式会即时更新；修改 TypeScript／TSX 会重新挂载面板，重置表单和收集结果，并中止正在进行的收集。正式构建的脚本仍只匹配官网订单页。
 
 正式构建与预览：
 
@@ -27,14 +31,6 @@ npm run preview
 优先使用原生控件。弹层通过 `command="show-modal"` 打开，通过 `<form method="dialog">` 或 Esc 收起；收起不停止任务。文件操作由下载组件处理，失败使用原生 `alert`，补充说明使用 `title`。
 
 JSX 编译为 Preact 的 `h` 调用。构建保留许可证和 JSDoc，移除优化注解，再由 Prettier 排版。
-
-### 本地反向代理
-
-无法直接访问官网时，运行 `npm run proxy`，打开 `http://127.0.0.1:3000`。登录和验证仍在浏览器中完成，用户脚本仅匹配官网地址。另开端口可运行：
-
-```sh
-node node_modules/vite/bin/vite.js --mode proxy --port 3001
-```
 
 ## 测试
 

@@ -9,7 +9,6 @@
   },
   "scripts": {
     "dev": "vite",
-    "proxy": "vite --mode proxy",
     "build": "vite build",
     "postbuild": "prettier --write --ignore-path= \"dist/*.js\"",
     "preview": "vite preview",

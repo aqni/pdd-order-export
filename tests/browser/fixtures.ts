@@ -35,7 +35,11 @@ export const test = base.extend<{ shop: Awaited<ReturnType<typeof openShop>> }>(
 const require = createRequire(import.meta.url);
 const origin = "https://mobile.pinduoduo.com";
 
-async function install(context: BrowserContext, extensionId: string) {
+export async function install(
+  context: BrowserContext,
+  extensionId: string,
+  scriptPath = "dist/pdd-order-export.user.js",
+) {
   const installer = await context.newPage();
   await installer.goto("chrome://extensions/?id=" + extensionId);
   await installer.evaluate(async (id) => {
@@ -80,14 +84,17 @@ async function install(context: BrowserContext, extensionId: string) {
     context.waitForEvent("page", {
       predicate: (page) => page.url().includes("/ask.html"),
     }),
-    installer
-      .locator("input[type=file]")
-      .setInputFiles("dist/pdd-order-export.user.js"),
+    installer.locator("input[type=file]").setInputFiles(scriptPath),
   ]);
   await Promise.all([
     confirmation.waitForEvent("close"),
     confirmation.getByRole("button", { name: /^(Install|安装)$/ }).click(),
   ]);
+  const source = await readFile(scriptPath, "utf8");
+  const name = source.match(/^\/\/\s*@name\s+(.+)$/m)?.[1]?.trim();
+  assert(name, "The installed userscript must have a name");
+  await installer.getByText(/^(Installed userscripts|已安装脚本)$/).click();
+  await expect(installer.getByText(name, { exact: true })).toBeVisible();
   await installer.close();
 }
 
