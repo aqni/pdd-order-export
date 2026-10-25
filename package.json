@@ -16,7 +16,7 @@
     "version": "node scripts/version.ts",
     "format": "prettier --write . \"!package-lock.json\"",
     "format:check": "prettier --check . \"!package-lock.json\"",
-    "typecheck": "ttsc --noEmit",
+    "typecheck": "ttsc --noEmit && node scripts/check-vue.cjs --noEmit",
     "test": "vitest run && npm run test:browser",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
@@ -27,7 +27,7 @@
     "@ttsc/unplugin": "0.33.1",
     "@types/node": "^24.19.2",
     "@types/papaparse": "5.5.2",
-    "@vitejs/plugin-vue-jsx": "5.1.6",
+    "@vitejs/plugin-vue": "6.0.10",
     "acorn": "8.19.0",
     "fflate": "0.8.3",
     "git-describe": "^4.1.1",
@@ -37,11 +37,13 @@
     "prettier": "^3.6.0",
     "ttsc": "0.33.1",
     "typescript": "7.0.2",
+    "typescript-vue": "npm:typescript@6.0.3",
     "typia": "13.3.0",
     "vite": "^8.0.0",
     "vite-plugin-monkey": "^8.1.1",
     "vitest": "^5.0.5",
     "vue": "3.5.44",
+    "vue-tsc": "3.3.13",
     "wretch": "3.0.9"
   }
 }

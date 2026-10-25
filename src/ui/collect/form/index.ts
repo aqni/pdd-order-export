@@ -1,1 +1,1 @@
-export { CollectForm, type CollectOptions, type CollectStatus } from "./form";
+export { default as CollectForm } from "./form.vue";

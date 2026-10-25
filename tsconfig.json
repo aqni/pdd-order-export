@@ -3,8 +3,6 @@
     "target": "ES2025",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "jsx": "preserve",
-    "jsxImportSource": "vue",
     "resolveJsonModule": true,
     "lib": ["ES2025", "DOM", "DOM.Iterable"],
     "types": ["node", "vite/client", "vite-plugin-monkey/style"],

@@ -1,1 +1,1 @@
-export { ExportControls } from "./controls";
+export { default as ExportControls } from "./controls.vue";

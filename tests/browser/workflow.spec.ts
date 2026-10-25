@@ -1,7 +1,7 @@
 import Papa from "papaparse";
 import { test, expect } from "./fixtures";
 
-test("stylesheet scopes stop at child regions and native fields keep form ownership", async ({
+test("SFC styles stay in the shadow root, respect component boundaries and keep form ownership", async ({
   shop,
 }) => {
   const { panel, page } = shop;
@@ -27,13 +27,18 @@ test("stylesheet scopes stop at child regions and native fields keep form owners
     (element) => getComputedStyle(element).borderTopWidth,
   );
   await page.locator("#pdd-order-export").evaluate((host) => {
-    const rules = [...host.shadowRoot!.querySelector("style")!.sheet!.cssRules];
-    const dialog = rules.find(
-      (rule) =>
-        rule instanceof CSSScopeRule && rule.start?.includes('"dialog"'),
-    ) as CSSScopeRule;
-    if (!dialog) throw new Error("Missing dialog style scope");
-    dialog.insertRule("button { border: 13px solid red !important; }");
+    const root = host.shadowRoot!;
+    const close = root.querySelector("dialog header button")!;
+    const scope = close
+      .getAttributeNames()
+      .find((name) => name.startsWith("data-v-"));
+    if (!scope) throw new Error("Missing SFC style scope");
+    const style = document.createElement("style");
+    style.textContent = `button[${scope}] { border: 13px solid red !important; }`;
+    root.append(style);
+    const hostile = document.createElement("style");
+    hostile.textContent = "button { font-size: 100px !important; }";
+    document.head.append(hostile);
   });
   expect(
     await close.evaluate((element) => getComputedStyle(element).borderTopWidth),
@@ -41,6 +46,9 @@ test("stylesheet scopes stop at child regions and native fields keep form owners
   expect(
     await start.evaluate((element) => getComputedStyle(element).borderTopWidth),
   ).toBe(border);
+  expect(
+    await start.evaluate((element) => getComputedStyle(element).fontSize),
+  ).not.toBe("100px");
   await expect(
     panel.getByText("日期留空表示不限。", { exact: true }),
   ).toBeVisible();

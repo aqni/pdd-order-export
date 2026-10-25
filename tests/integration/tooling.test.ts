@@ -25,7 +25,7 @@ test("the real development server serves an installable script and compiled vali
     const module = await (await fetch(base + "/src/pdd.ts")).text();
     expect(module).toContain("getOrderDetail");
     expect(module).not.toMatch(/\bassert<|\bassert\s*\(/);
-    for await (const component of glob(["src/ui/**/*.tsx", "src/main.ts"])) {
+    for await (const component of glob(["src/ui/**/*.vue", "src/main.ts"])) {
       const response = await fetch(
         base + "/" + component.replaceAll("\\", "/"),
       );

@@ -1,1 +1,2 @@
-export { CollectControls, type CollectResult } from "./controls";
+export { default as CollectControls } from "./controls.vue";
+export type { CollectResult } from "./types";

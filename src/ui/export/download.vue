@@ -1,3 +1,4 @@
+<script setup lang="ts">
 import type { CollectResult } from "../collect";
 import { downloadFile, exportFile } from "../../export";
 
@@ -7,26 +8,10 @@ const descriptions: Record<FileFormat, string> = {
   json: "导出为 JSON，保留解析后的订单与详情数据。\n\n数据可能包含地址、手机号等个人信息，请妥善保管。大整数可能存在精度损失。",
 };
 
-/** 一种格式对应一个下载入口，只在明确点击时生成文件。 */
-export function ExportDownload({
-  result,
-  format,
-}: {
-  result: CollectResult;
-  format: FileFormat;
-}) {
-  return (
-    <button
-      type="button"
-      title={descriptions[format]}
-      onClick={(event) => {
-        if ((event.currentTarget as HTMLButtonElement).isConnected)
-          save(result, format);
-      }}
-    >
-      {`导出${result.partial ? "部分" : ""} ${format.toUpperCase()}`}
-    </button>
-  );
+const props = defineProps<{ result: CollectResult; format: FileFormat }>();
+function download(event: MouseEvent) {
+  if ((event.currentTarget as HTMLButtonElement).isConnected)
+    save(props.result, props.format);
 }
 function save(
   { entries, partial, startDate, endDate }: CollectResult,
@@ -50,3 +35,10 @@ function save(
     globalThis.alert("无法发起下载，请检查浏览器下载权限后重试。");
   }
 }
+</script>
+
+<template>
+  <button type="button" :title="descriptions[format]" @click="download">
+    {{ `导出${result.partial ? "部分" : ""} ${format.toUpperCase()}` }}
+  </button>
+</template>

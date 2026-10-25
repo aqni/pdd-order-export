@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import ttsc from "@ttsc/unplugin/vite";
-import vueJsx from "@vitejs/plugin-vue-jsx";
+import { vueComponents } from "./build/vue.ts";
 import monkey, { cdn } from "vite-plugin-monkey";
 import proxyConfig from "./build/proxy.ts";
 import { getUserscriptVersion } from "./build/version.ts";
@@ -33,7 +33,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
     // monkey 处理最终用户脚本包装，放在源码转换插件之后。
     plugins: [
       ttsc(),
-      vueJsx(),
+      vueComponents(),
       monkey({
         entry: "src/main.ts",
         build: {

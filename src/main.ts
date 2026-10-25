@@ -1,22 +1,15 @@
-import { createApp } from "vue";
+import { defineCustomElement } from "vue";
 import { ExportPanel } from "./ui";
-import stylesheet from "./ui/styles.css?style";
 
 const hostId = "pdd-order-export";
 
-// @run-at document-end 保证 DOM 已解析。
+// SFC 样式由 Vue 注入唯一的 Shadow Root；内部仍是普通 Vue 组件。
 if (!document.getElementById(hostId)) {
-  const host = document.createElement("div");
-  const mountNode = document.createElement("div");
-  const shadow = host.attachShadow({ mode: "open" });
-  shadow.append(stylesheet.cloneNode(true), mountNode);
+  const tag = "pdd-export-panel";
+  if (!customElements.get(tag)) {
+    customElements.define(tag, defineCustomElement(ExportPanel));
+  }
+  const host = document.createElement(tag);
   host.id = hostId;
-  const app = createApp(ExportPanel);
-  app.mount(mountNode);
   document.body.append(host);
-  import.meta.hot?.dispose(() => {
-    app.unmount();
-    shadow.replaceChildren();
-    host.remove();
-  });
 }
