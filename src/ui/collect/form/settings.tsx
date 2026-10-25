@@ -1,62 +1,47 @@
-import { Component, createRef, h } from "preact";
+import { h, type RefObject } from "preact";
 import { CollectDateRange } from "./date-range";
 import { CollectDetailsOption } from "./details-option";
 import { CollectRequestSettings } from "./request-settings";
-import type { CollectOptions } from "./form";
+import type { CollectDraft } from "./form";
 
-/** 组合字段和折叠摘要，通过组件接口读取选项。 */
-export class CollectSettings extends Component<
-  { disabled: boolean },
-  { summary: string }
-> {
-  state = { summary: "不限日期 · 含详情" };
-  readonly #details = createRef<HTMLDetailsElement>();
-  readonly #dates = createRef<CollectDateRange>();
-  readonly #includeDetails = createRef<CollectDetailsOption>();
-  readonly #requests = createRef<CollectRequestSettings>();
-
-  render(
-    { disabled }: { disabled: boolean },
-    { summary }: { summary: string },
-  ) {
-    return (
-      <details
-        data-ui="collect-settings"
-        class="settings"
-        open
-        ref={this.#details}
-        onInput={this.#summarize}
-        onInvalidCapture={() => {
-          this.#details.current!.open = true;
-        }}
-      >
-        <summary>
-          <span>收集设置</span>
-          <small>{summary}</small>
-        </summary>
-        <fieldset disabled={disabled}>
-          <CollectDateRange ref={this.#dates} />
-          <CollectDetailsOption ref={this.#includeDetails} />
-          <CollectRequestSettings ref={this.#requests} />
-        </fieldset>
-      </details>
-    );
-  }
-  collapse() {
-    this.#details.current!.open = false;
-  }
-  read(): CollectOptions {
-    this.#summarize();
-    return {
-      ...this.#dates.current!.read(),
-      ...this.#requests.current!.read(),
-      includeDetails: this.#includeDetails.current!.checked,
-    };
-  }
-  #summarize = () => {
-    const summary =
-      this.#dates.current!.description +
-      (this.#includeDetails.current!.checked ? " · 含详情" : " · 仅列表");
-    if (summary !== this.state.summary) this.setState({ summary });
-  };
+/** 摘要直接由草稿推导；不保存摘要副本，也不读取子组件实例。 */
+export function CollectSettings({
+  draft,
+  disabled,
+  detailsRef,
+}: {
+  draft: CollectDraft;
+  disabled: boolean;
+  detailsRef: RefObject<HTMLDetailsElement>;
+}) {
+  const { startDate, endDate, includeDetails } = draft;
+  const dates =
+    !startDate && !endDate
+      ? "不限日期"
+      : `${startDate || "不限"} 至 ${endDate || "不限"}`;
+  const summary = dates + (includeDetails ? " · 含详情" : " · 仅列表");
+  return (
+    <details
+      data-ui="collect-settings"
+      class="settings"
+      open
+      ref={detailsRef}
+      onInvalidCapture={(event) => {
+        event.currentTarget.open = true;
+      }}
+    >
+      <summary>
+        <span>收集设置</span>
+        <small>{summary}</small>
+      </summary>
+      <fieldset disabled={disabled}>
+        <CollectDateRange startDate={startDate} endDate={endDate} />
+        <CollectDetailsOption checked={includeDetails} />
+        <CollectRequestSettings
+          pageSize={draft.pageSize}
+          maxPages={draft.maxPages}
+        />
+      </fieldset>
+    </details>
+  );
 }

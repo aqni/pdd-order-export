@@ -1,27 +1,30 @@
-import { Component, createRef, h } from "preact";
+import { Component, h } from "preact";
 import { CollectControls, type CollectResult } from "./collect";
 import { ExportControls } from "./export";
 import { ExportDialog } from "./dialog";
 
-/** 只连接区域接口；收集任务和结果分别由各自组件持有。 */
-export class ExportPanel extends Component {
-  readonly #exports = createRef<ExportControls>();
+/** 持有结果快照并连接区域接口；收集进度仍留在收集区域。 */
+export class ExportPanel extends Component<
+  {},
+  { result: CollectResult | null }
+> {
+  state = { result: null as CollectResult | null };
 
   render() {
     return (
       <div data-ui="panel">
         <ExportDialog>
           <CollectControls onStart={this.#onStart} onFinish={this.#onFinish} />
-          <ExportControls ref={this.#exports} />
+          <ExportControls result={this.state.result} />
         </ExportDialog>
       </div>
     );
   }
 
   #onStart = () => {
-    this.#exports.current!.setResult(null);
+    this.setState({ result: null });
   };
   #onFinish = (result: CollectResult | null) => {
-    this.#exports.current!.setResult(result);
+    this.setState({ result });
   };
 }

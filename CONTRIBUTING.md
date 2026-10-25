@@ -20,7 +20,7 @@ npm run preview
 
 产物位于 `dist/`，不压缩并经过排版，不提交到仓库。运行时依赖通过 `vite.config.ts` 的 `externalGlobals` 加载固定版本的官方浏览器产物。安装依赖时保留可选依赖，不使用 `--omit=optional`。
 
-面板使用 Preact 和 TSX。`src/ui/` 按职责划分为 `collect/`、`export/`、`dialog/`，各区域通过 `index.ts` 暴露接口；表单内部组件位于 `collect/form/`。收集区域管理任务、取消与进度，表单字段保存草稿，导出区域持有结果快照，入口只连接区域接口。
+面板使用 Preact 和 TSX。`src/ui/` 按职责划分为 `collect/`、`export/`、`dialog/`，各区域通过 `index.ts` 暴露接口；表单内部组件位于 `collect/form/`。收集区域管理任务、取消与进度；表单集中保存草稿，字段通过 props 接收值，摘要在渲染时由草稿推导。提交统一读取原生表单，校验后转换为采集选项。入口持有结果快照并通过 props 交给导出区域，不通过组件 ref 调用结果更新方法。
 
 `main.ts` 将面板和独立的 `ui/styles.css` 挂载到 Shadow Root，隔离站点样式。样式按组件区域组织，用 `@scope` 限制选择器范围；原生字段和操作按钮共用一个表单树，保留浏览器的约束校验、回车提交和焦点行为。以桌面布局为主，窄屏只做基本防溢出。
 

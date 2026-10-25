@@ -1,19 +1,20 @@
-import { Component, createRef, h } from "preact";
+import { Component, h } from "preact";
+import type { CollectDraft } from "./form";
 
-export class CollectDateRange extends Component {
-  readonly #start = createRef<HTMLInputElement>();
-  readonly #end = createRef<HTMLInputElement>();
+type Props = Pick<CollectDraft, "startDate" | "endDate">;
+
+export class CollectDateRange extends Component<Props> {
   readonly #hint = `pdd-date-${crypto.randomUUID()}`;
-  render() {
+  render({ startDate, endDate }: Props) {
     return (
-      <div data-ui="collect-dates" onInput={this.#constrain}>
+      <div data-ui="collect-dates">
         <div class="fields">
           <label>
             开始日期
             <input
               type="date"
               name="startDate"
-              ref={this.#start}
+              value={startDate}
               aria-describedby={this.#hint}
             />
           </label>
@@ -22,7 +23,8 @@ export class CollectDateRange extends Component {
             <input
               type="date"
               name="endDate"
-              ref={this.#end}
+              value={endDate}
+              min={startDate}
               aria-describedby={this.#hint}
             />
           </label>
@@ -31,25 +33,4 @@ export class CollectDateRange extends Component {
       </div>
     );
   }
-  get description() {
-    const start = this.#start.current!.value,
-      end = this.#end.current!.value;
-    return !start && !end
-      ? "不限日期"
-      : `${start || "不限"} 至 ${end || "不限"}`;
-  }
-  read() {
-    this.#constrain();
-    return {
-      startDate: readDate(this.#start.current!),
-      endDate: readDate(this.#end.current!),
-    };
-  }
-  #constrain = () => {
-    this.#end.current!.min = this.#start.current!.value;
-  };
-}
-function readDate(input: HTMLInputElement): Date | null {
-  const time = input.valueAsNumber;
-  return Number.isNaN(time) ? null : new Date(time);
 }

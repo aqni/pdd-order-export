@@ -149,6 +149,60 @@ test("collection preserves settings and requires an explicit export interaction"
   expect(files.downloadFile).toHaveBeenCalledOnce();
 });
 
+test.each([2026, 10000])(
+  "draft changes preserve empty fields and native date snapshots for year %i",
+  async (year) => {
+    mockResult();
+    const startDate = `${year}-10-17`;
+    const endDate = `${year}-10-18`;
+    const date = (day: number) => new Date(Date.UTC(year, 9, day));
+    const { root, native, input, action, exports } = ui(createView());
+    const summary = root.querySelector(".settings summary small")!;
+    const edit = (name: string, value: string) => {
+      input(name).value = value;
+      input(name).dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    edit("pageSize", "");
+    edit("startDate", startDate);
+    edit("endDate", endDate);
+    input("includeDetails").click();
+    await vi.waitFor(() =>
+      expect(summary.textContent).toBe(`${startDate} 至 ${endDate} · 仅列表`),
+    );
+    expect(input("pageSize").value).toBe("");
+    expect(input("endDate").min).toBe(startDate);
+    native.requestSubmit();
+    expect(collection.collectOrders).not.toHaveBeenCalled();
+    edit("pageSize", "30");
+    edit("maxPages", "3");
+    native.requestSubmit();
+    await vi.waitFor(() => expect(exports()?.hidden ?? true).toBe(false));
+    expect(collection.collectOrders).toHaveBeenCalledWith(
+      expect.any(PddClient),
+      {
+        startDate: date(17),
+        endDate: date(18),
+        includeDetails: false,
+        pageSize: 30,
+        maxPages: 3,
+      },
+      expect.any(AbortSignal),
+    );
+    edit("startDate", `${year}-10-01`);
+    await vi.waitFor(() =>
+      expect(summary.textContent).toBe(`${year}-10-01 至 ${endDate} · 仅列表`),
+    );
+    action("导出 JSON").click();
+    expect(files.exportFile).toHaveBeenLastCalledWith(
+      sample.entries,
+      "json",
+      date(17),
+      date(18),
+      false,
+    );
+  },
+);
+
 test("hiding preserves a pending task until an explicit stop", async () => {
   let signal!: AbortSignal;
   vi.mocked(PddClient.prototype.getOrders).mockResolvedValueOnce(
