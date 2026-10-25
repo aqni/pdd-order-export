@@ -18,7 +18,7 @@ export default defineConfig({
         },
       },
       userscript: {
-        version: versionFromGitTag(),
+        version: versionFromGitTag().replace(/^v/, ""),
         name: "拼多多订单导出工具",
         namespace: "http://tampermonkey.net/",
         author: "aqnin@outlook.com",

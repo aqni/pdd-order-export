@@ -44,7 +44,7 @@ CSV 防护公式前缀文本，JSON 仅保留解析后的订单条目数组。�
 
 ## 发布
 
-发布 tag 使用 `vYYYY-MM-DD`，同日修订追加 `.1`、`.2`，不补前导零。构建版本由 `absolute-version` 推导；干净的日期 tag 保留 `v` 前缀。新版本应高于 Greasy Fork 当前版本，CI 不校验 tag。
+发布 tag 使用 `vYYYY-MM-DD`，同日修订追加 `.1`、`.2`，不补前导零。构建版本由 `absolute-version` 推导并去掉 `v` 前缀。新版本应高于 Greasy Fork 当前版本，CI 不校验 tag。
 
 1. 完成检查并推送代码，从包含发布工作流的提交创建 GitHub Release，填写 tag 和更新日志。
 2. 等待 CI 检查通过，工作流会自动上传构建的 `.user.js`。
