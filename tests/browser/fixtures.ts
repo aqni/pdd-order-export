@@ -124,7 +124,7 @@ export async function install(
   const source = await readFile(scriptPath, "utf8");
   const name = source.match(/^\/\/\s*@name\s+(.+)$/m)?.[1]?.trim();
   assert(name, "The installed userscript must have a name");
-  await installer.getByText(/^(Installed userscripts|已安装脚本)$/).click();
+  await installer.getByText(/^(Installed userscripts|已安装脚本)$/i).click();
   await expect(installer.getByText(name, { exact: true })).toBeVisible();
   await installer.close();
 }
@@ -211,6 +211,7 @@ async function openShop(testInfo: TestInfo) {
   try {
     context = await chromium.launchPersistentContext("", {
       channel: process.env.PLAYWRIGHT_CHANNEL ?? "chromium",
+      locale: "en-US",
       headless: true,
       hasTouch: true,
       viewport: { width: 1000, height: 800 },

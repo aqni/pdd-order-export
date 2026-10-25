@@ -54,6 +54,7 @@ const test = base.extend<{ development: DevelopmentPage }>({
         );
         context = await chromium.launchPersistentContext("", {
           channel: process.env.PLAYWRIGHT_CHANNEL ?? "chromium",
+          locale: "en-US",
           headless: true,
           args: [
             "--disable-extensions-except=" + extension,
