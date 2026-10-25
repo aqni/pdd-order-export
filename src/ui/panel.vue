@@ -32,4 +32,21 @@ function setResult(value: CollectResult | null) {
 }
 </style>
 
-<style src="./styles.css"></style>
+<style>
+:host {
+  all: initial;
+  display: block;
+}
+button,
+input {
+  box-sizing: border-box;
+  font: inherit;
+  max-inline-size: 100%;
+}
+[hidden] {
+  display: none !important;
+}
+hr {
+  margin-block: 1em;
+}
+</style>

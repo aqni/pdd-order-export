@@ -7,11 +7,7 @@ function expand(event: Event) {
 </script>
 
 <template>
-  <details
-    data-ui="collect-requests"
-    class="field-group"
-    @invalid.capture="expand"
-  >
+  <details data-ui="collect-requests" @invalid.capture="expand">
     <summary>请求设置</summary>
     <div class="fields">
       <label
@@ -34,3 +30,25 @@ function expand(event: Event) {
     </div>
   </details>
 </template>
+
+<style scoped>
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9em), 1fr));
+  gap: 0.75em 1em;
+}
+label {
+  display: grid;
+  gap: 0.25em;
+}
+input {
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+summary {
+  cursor: pointer;
+}
+details[open] > summary {
+  margin-block-end: 0.75em;
+}
+</style>

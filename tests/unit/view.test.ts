@@ -1,18 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { h, render } from "vue";
+import { defineCustomElement, h, nextTick, render } from "vue";
 import { ExportPanel } from "../../src/ui";
-import stylesheet from "../../src/ui/styles.css?style";
 import { PddClient, PddError, type Order } from "../../src/pdd";
 import * as collection from "../../src/collect";
 import * as files from "../../src/export";
 import type { CollectedOrder } from "../../src/collect";
 import sample from "../fixtures/orders/reviewed-orders/collected.json" with { type: "json" };
-
-// 单元测试只需样式节点；真实 CSS 转换、布局和隔离由浏览器测试覆盖。
-vi.mock("../../src/ui/styles.css?style", () => ({
-  default: document.createElement("style"),
-}));
 
 // jsdom 没有模态弹层实现；真实焦点、Esc、布局由浏览器测试覆盖。
 HTMLDialogElement.prototype.showModal = function () {
@@ -53,7 +47,7 @@ function createView(): ViewHandle {
   const element = document.createElement("div");
   const mount = document.createElement("div");
   const root = element.attachShadow({ mode: "open" });
-  root.append(stylesheet.cloneNode(true), mount);
+  root.append(mount);
   render(h(ExportPanel, {}), mount);
   document.body.append(element);
   const view: ViewHandle = {
@@ -107,18 +101,28 @@ function mockResult() {
   return result;
 }
 
-test("multiple views keep independent style nodes when one element is moved", () => {
-  const first = createView();
-  const second = createView();
-  const firstStyle = first.element.shadowRoot!.querySelector("style")!;
-  const secondStyle = second.element.shadowRoot!.querySelector("style")!;
-  expect(firstStyle).toBeInstanceOf(HTMLStyleElement);
-  expect(secondStyle).toBeInstanceOf(HTMLStyleElement);
-  expect(firstStyle).not.toBe(secondStyle);
-  first.element.remove();
-  document.body.append(first.element);
-  expect(first.element.shadowRoot!.querySelector("style")).toBe(firstStyle);
-  expect(second.element.shadowRoot!.querySelector("style")).toBe(secondStyle);
+test("multiple views keep independent style nodes when one element is moved", async () => {
+  const Panel = defineCustomElement(ExportPanel);
+  customElements.define("pdd-style-test", Panel);
+  const first = new Panel();
+  const second = new Panel();
+  document.body.append(first, second);
+  try {
+    const firstStyle = first.shadowRoot!.querySelector("style")!;
+    const secondStyle = second.shadowRoot!.querySelector("style")!;
+    expect(firstStyle).toBeInstanceOf(HTMLStyleElement);
+    expect(secondStyle).toBeInstanceOf(HTMLStyleElement);
+    expect(firstStyle).not.toBe(secondStyle);
+    first.remove();
+    document.body.append(first);
+    await nextTick();
+    expect(first.shadowRoot!.querySelector("style")).toBe(firstStyle);
+    expect(second.shadowRoot!.querySelector("style")).toBe(secondStyle);
+  } finally {
+    first.remove();
+    second.remove();
+    await nextTick();
+  }
 });
 
 test("draft bindings update the summary without changing the collected snapshot", async () => {

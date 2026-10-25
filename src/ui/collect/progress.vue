@@ -17,11 +17,7 @@ const message = computed(() =>
 </script>
 
 <template>
-  <section
-    data-ui="collect-progress"
-    class="summary-block"
-    aria-label="收集进度"
-  >
+  <section data-ui="collect-progress" aria-label="收集进度">
     <h3>收集进度</h3>
     <p role="status">{{ message }}</p>
     <progress
@@ -40,3 +36,24 @@ const message = computed(() =>
     </p>
   </section>
 </template>
+
+<style scoped>
+section {
+  display: grid;
+  gap: 0.5em;
+}
+h3 {
+  margin: 0;
+  font-size: 1em;
+}
+p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+progress {
+  inline-size: 100%;
+}
+.counts {
+  font-variant-numeric: tabular-nums;
+}
+</style>

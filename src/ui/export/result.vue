@@ -22,7 +22,7 @@ function formatDate(date: Date | null) {
 </script>
 
 <template>
-  <div data-ui="export-result" class="summary-block">
+  <div data-ui="export-result">
     <h3>收集结果</h3>
     <p role="status">{{ status }}</p>
     <p class="counts">{{ counts }}</p>
@@ -32,3 +32,21 @@ function formatDate(date: Date | null) {
     </p>
   </div>
 </template>
+
+<style scoped>
+[data-ui="export-result"] {
+  display: grid;
+  gap: 0.5em;
+}
+h3 {
+  margin: 0;
+  font-size: 1em;
+}
+p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.counts {
+  font-variant-numeric: tabular-nums;
+}
+</style>

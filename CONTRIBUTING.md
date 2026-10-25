@@ -24,7 +24,7 @@ npm run preview
 
 `main.ts` 通过 `defineCustomElement` 创建面板唯一的 Shadow Root，隔离站点样式；内部仍是普通 Vue 组件，不为字段创建额外的 Shadow Root。原生字段和操作按钮共用一个表单树，保留浏览器的约束校验、回车提交和焦点行为。以桌面布局为主，窄屏只做基本防溢出。
 
-组件自己的布局使用同文件的 `<style scoped>`；字体、原生控件基础样式和重复的字段／摘要结构放在 `ui/styles.css`，由面板加载一次。SFC 以官方插件的 custom-element 模式编译，将样式保留为组件的 CSS 字符串；Vue 将面板及子组件的样式注入同一个 Shadow Root，不注入站点文档。`scoped` 通过选择器属性限制组件范围，公共结构样式使用 `@scope`。
+组件自己的布局使用同文件的 `<style scoped>`，字段、进度和结果分别维护自身样式；宿主重置、原生控件和 `hidden` 等基础规则集中在 `panel.vue` 的普通 `<style>` 中，只加载一次。SFC 以官方插件的 custom-element 模式编译，将样式保留为组件的 CSS 字符串；Vue 将面板及子组件的样式注入同一个 Shadow Root，不注入站点文档。`scoped` 通过选择器属性限制组件范围，不依赖公共布局类或 `@scope`。
 
 优先使用原生控件。弹层通过 `command="show-modal"` 打开，通过 `<form method="dialog">` 或 Esc 收起；收起不停止任务。文件操作由下载组件处理，失败使用原生 `alert`，补充说明使用 `title`。
 
