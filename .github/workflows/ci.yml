@@ -15,8 +15,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    outputs:
-      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,21 +37,14 @@ jobs:
           name: test-failures
           path: test-results/
           retention-days: 7
-      - name: Get userscript version
-        id: version
-        run: |
-          version=$(npm run --silent version)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: userscript-${{ steps.version.outputs.version }}
+          name: userscript
           path: dist/pdd-order-export.user.js
           if-no-files-found: error
   release:
     needs: build
-    if: >-
-      github.event_name == 'release' &&
-      github.ref_name == format('v{0}', needs.build.outputs.version)
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -61,7 +52,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: userscript-${{ needs.build.outputs.version }}
+          name: userscript
           path: dist
       - name: Upload userscript to release
         env:

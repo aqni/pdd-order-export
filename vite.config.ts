@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import ttsc from "@ttsc/unplugin/vite";
 import monkey, { cdn } from "vite-plugin-monkey";
 import proxyConfig from "./build/proxy.ts";
-import { getUserscriptVersion } from "./build/version.ts";
+import { versionFromGitTag } from "absolute-version";
 
 export default defineConfig(({ mode, command, isPreview }) => {
   if (mode === "proxy" && command === "serve" && !isPreview) {
@@ -43,7 +43,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
           },
         },
         userscript: {
-          version: getUserscriptVersion(process.cwd()),
+          version: versionFromGitTag(),
           name: "拼多多订单导出工具",
           namespace: "http://tampermonkey.net/",
           author: "aqnin@outlook.com",

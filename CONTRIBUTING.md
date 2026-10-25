@@ -54,7 +54,7 @@ CSV 会为公式前缀文本添加单引号，避免表格软件将其作为公�
 
 ## 发布
 
-版本号使用日期 tag：`vYYYY-MM-DD`，同日修订依次为 `.1`、`.2`，不补前导零。新版本应高于 Greasy Fork 当前版本，`npm run version` 可查看 Git 推导的版本号。
+版本号使用日期 tag：`vYYYY-MM-DD`，同日修订依次为 `.1`、`.2`，不补前导零。构建直接使用 `absolute-version` 从 Git 推导版本：干净的日期 tag 保留原名及 `v` 前缀，其他构建追加分支、提交距离和哈希；工作区有修改时追加 `.SNAPSHOT.<主机名>`。新版本应高于 Greasy Fork 当前版本，CI 不校验 tag。
 
 1. 完成检查并推送代码，从包含发布工作流的提交创建 GitHub Release，填写 tag 和更新日志。
 2. 等待 CI 检查通过，工作流会自动上传构建的 `.user.js`。
