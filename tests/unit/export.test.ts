@@ -34,14 +34,16 @@ if (!cases.length) {
   throw new Error("No export regression cases found");
 }
 
-test.each(cases)(
-  "$name: export expectations",
-  async ({ directory, success, failure }) => {
-    // Each case is a standalone export JSON file, not a call to a fixture factory.
-    const legacy: { entries: readonly CollectedOrder[]; complete: boolean } =
-      JSON.parse(readFileSync(join(directory, "collected.json"), "utf8"));
-    const input = legacy.entries;
-    const partial = !legacy.complete;
+test.each(
+  cases.flatMap((entry) =>
+    [false, true].map((partial) => ({ ...entry, partial })),
+  ),
+)(
+  "$name (partial=$partial): export expectations",
+  async ({ directory, success, failure, partial }) => {
+    const input: readonly CollectedOrder[] = JSON.parse(
+      readFileSync(join(directory, "collected.json"), "utf8"),
+    );
     const before = structuredClone(input);
     if (success) {
       const actual = exportFile(input, "csv", null, null, partial);

@@ -1,61 +1,41 @@
-{
-  "schemaVersion": 1,
-  "startedAt": "2026-10-17T10:00:00.000Z",
-  "finishedAt": "2026-10-17T10:01:00.000Z",
-  "options": {
-    "startDate": "",
-    "endDate": "",
-    "pageSize": 10,
-    "maxPages": 10,
-    "includeDetails": true
-  },
-  "reason": "cancelled",
-  "complete": false,
-  "error": null,
-  "progress": {
-    "pages": 1,
-    "scanned": 2,
-    "selected": 2
-  },
-  "entries": [
-    {
-      "order": {
-        "order_sn": "261017-partial-a",
-        "offset": "a",
-        "order_amount": 1000
-      },
-      "detail": {
-        "orderSn": "261017-partial-a",
-        "orderDescList": [
-          {
-            "key": " 支付方式:",
-            "value": "微信支付"
-          },
-          {
-            "key": "支付方式：",
-            "value": "重复项不覆盖首项"
-          },
-          {
-            "key": "下单时间",
-            "value": "2026-10-17 08:00:00"
-          },
-          {
-            "key": "物流公司：",
-            "value": "合成物流"
-          },
-          {
-            "key": "快递单号:",
-            "value": "00001234567890123456789"
-          }
-        ]
-      }
+[
+  {
+    "order": {
+      "order_sn": "261017-partial-a",
+      "offset": "a",
+      "order_amount": 1000
     },
-    {
-      "order": {
-        "order_sn": "261017-partial-b",
-        "offset": "b"
-      },
-      "detail": null
+    "detail": {
+      "orderSn": "261017-partial-a",
+      "orderDescList": [
+        {
+          "key": " 支付方式:",
+          "value": "微信支付"
+        },
+        {
+          "key": "支付方式：",
+          "value": "重复项不覆盖首项"
+        },
+        {
+          "key": "下单时间",
+          "value": "2026-10-17 08:00:00"
+        },
+        {
+          "key": "物流公司：",
+          "value": "合成物流"
+        },
+        {
+          "key": "快递单号:",
+          "value": "00001234567890123456789"
+        }
+      ]
     }
-  ]
-}
+  },
+  {
+    "order": {
+      "order_sn": "261017-partial-b",
+      "offset": "b"
+    },
+    "detail": null
+  }
+]

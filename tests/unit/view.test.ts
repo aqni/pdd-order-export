@@ -100,7 +100,7 @@ function mockPage(entries: readonly CollectedOrder[]) {
   };
 }
 function mockResult() {
-  const result: readonly CollectedOrder[] = sample.entries;
+  const result: readonly CollectedOrder[] = sample;
   vi.mocked(collection.collectOrders).mockImplementation(async function* () {
     yield mockPage(result);
   });
@@ -196,7 +196,7 @@ test.each([2026, 10000])(
     );
     action("导出 JSON").click();
     expect(files.exportFile).toHaveBeenLastCalledWith(
-      sample.entries,
+      sample,
       "json",
       date(17),
       date(18),
@@ -208,10 +208,10 @@ test.each([2026, 10000])(
 test("hiding preserves a pending task until an explicit stop", async () => {
   let signal!: AbortSignal;
   vi.mocked(PddClient.prototype.getOrders).mockResolvedValueOnce(
-    sample.entries.map((e) => e.order),
+    sample.map((e) => e.order),
   );
   vi.mocked(PddClient.prototype.getOrderDetail)
-    .mockResolvedValueOnce({ orderSn: sample.entries[0]!.order.order_sn })
+    .mockResolvedValueOnce({ orderSn: sample[0]!.order.order_sn })
     .mockImplementationOnce((_id, active) => {
       signal = active;
       return new Promise((_, reject) =>
@@ -283,7 +283,7 @@ test("busy updates keep native draft nodes and submit their current values", asy
     await new Promise<void>((resolve) => {
       release = resolve;
     });
-    yield mockPage(sample.entries);
+    yield mockPage(sample);
   });
   const view = createView();
   const { root, native, input, running, exports } = ui(view);
@@ -429,7 +429,7 @@ test.each(["cancel", "dispose"] as const)(
     let finishPage!: () => void;
     let signal!: AbortSignal;
     const nextPage = vi.fn();
-    const entry = sample.entries[0]!;
+    const entry = sample[0]!;
     vi.mocked(collection.collectOrders).mockImplementationOnce(
       async function* (_source, _options, active) {
         signal = active;

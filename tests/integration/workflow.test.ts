@@ -15,16 +15,16 @@ async function drain(pages: ReturnType<typeof collectOrders>) {
 }
 
 const options = {
-  ...sample.options,
-  startDate: sample.options.startDate
-    ? new Date(sample.options.startDate)
-    : null,
-  endDate: sample.options.endDate ? new Date(sample.options.endDate) : null,
+  startDate: null,
+  endDate: null,
+  pageSize: 50,
+  maxPages: 10,
+  includeDetails: true,
 };
 
-const pages = [sample.entries.slice(0, 2), sample.entries.slice(2)].map(
-  (entries) => ({ orders: entries.map((entry) => entry.order) }),
-);
+const pages = [sample.slice(0, 2), sample.slice(2)].map((entries) => ({
+  orders: entries.map((entry) => entry.order),
+}));
 
 beforeEach(() => {
   vi.stubGlobal("Blob", Blob);
@@ -58,7 +58,7 @@ test("reviewed pages cross protocol validation, collection and both export forma
       );
       return Response.json(pages[page++] ?? { orders: [] });
     }
-    const entry = sample.entries.find(
+    const entry = sample.find(
       (entry) => entry.order.order_sn === url.searchParams.get("order_sn"),
     )!;
     return new Response(
@@ -68,18 +68,14 @@ test("reviewed pages cross protocol validation, collection and both export forma
     );
   });
   const result = await drain(
-    collectOrders(
-      client(fetcher),
-      { ...options, pageSize: 50 },
-      new AbortController().signal,
-    ),
+    collectOrders(client(fetcher), options, new AbortController().signal),
   );
 
   expect(result.map((entry) => entry.order)).toEqual(
-    sample.entries.map((entry) => entry.order),
+    sample.map((entry) => entry.order),
   );
   expect(result.map((entry) => entry.detail)).toEqual(
-    sample.entries.map((entry) => entry.detail),
+    sample.map((entry) => entry.detail),
   );
   expect(
     JSON.parse(

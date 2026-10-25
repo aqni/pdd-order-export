@@ -1,34 +1,14 @@
-{
-  "schemaVersion": 1,
-  "startedAt": "2026-10-17T10:00:00.000Z",
-  "finishedAt": "2026-10-17T10:01:00.000Z",
-  "options": {
-    "startDate": "",
-    "endDate": "",
-    "pageSize": 10,
-    "maxPages": 10,
-    "includeDetails": false
-  },
-  "reason": "end",
-  "complete": true,
-  "error": null,
-  "progress": {
-    "pages": 2,
-    "scanned": 1,
-    "selected": 1
-  },
-  "entries": [
-    {
-      "order": {
-        "order_sn": "261017-invalid",
-        "offset": "a",
-        "order_goods": [
-          {
-            "goods_number": -1
-          }
-        ]
-      },
-      "detail": null
-    }
-  ]
-}
+[
+  {
+    "order": {
+      "order_sn": "261017-invalid",
+      "offset": "a",
+      "order_goods": [
+        {
+          "goods_number": -1
+        }
+      ]
+    },
+    "detail": null
+  }
+]

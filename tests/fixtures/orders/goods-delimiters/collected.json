@@ -1,41 +1,21 @@
-{
-  "schemaVersion": 1,
-  "startedAt": "2026-10-18T00:00:00.000Z",
-  "finishedAt": "2026-10-18T00:00:01.000Z",
-  "options": {
-    "startDate": "",
-    "endDate": "",
-    "pageSize": 10,
-    "maxPages": 10,
-    "includeDetails": false
-  },
-  "reason": "end",
-  "complete": true,
-  "error": null,
-  "progress": {
-    "pages": 2,
-    "scanned": 1,
-    "selected": 1
-  },
-  "entries": [
-    {
-      "order": {
-        "order_sn": "261018-delimiters",
-        "offset": "cursor:delimiters",
-        "order_goods": [
-          {
-            "goods_name": " 马克杯,带盖；套装（限量）：￥特价\n",
-            "spec": " 白色;350ml（标准）\r\n版本：标准 ",
-            "goods_number": 2,
-            "goods_price": 1990
-          },
-          {
-            "goods_name": " ,;，；\n",
-            "spec": "\t；，"
-          }
-        ]
-      },
-      "detail": null
-    }
-  ]
-}
+[
+  {
+    "order": {
+      "order_sn": "261018-delimiters",
+      "offset": "cursor:delimiters",
+      "order_goods": [
+        {
+          "goods_name": " 马克杯,带盖；套装（限量）：￥特价\n",
+          "spec": " 白色;350ml（标准）\r\n版本：标准 ",
+          "goods_number": 2,
+          "goods_price": 1990
+        },
+        {
+          "goods_name": " ,;，；\n",
+          "spec": "\t；，"
+        }
+      ]
+    },
+    "detail": null
+  }
+]

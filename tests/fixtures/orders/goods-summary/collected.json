@@ -1,51 +1,31 @@
-{
-  "schemaVersion": 1,
-  "startedAt": "2026-10-18T00:00:00.000Z",
-  "finishedAt": "2026-10-18T00:00:01.000Z",
-  "options": {
-    "startDate": "",
-    "endDate": "",
-    "pageSize": 10,
-    "maxPages": 10,
-    "includeDetails": false
-  },
-  "reason": "end",
-  "complete": true,
-  "error": null,
-  "progress": {
-    "pages": 2,
-    "scanned": 1,
-    "selected": 1
-  },
-  "entries": [
-    {
-      "order": {
-        "order_sn": "261018-goods",
-        "offset": "cursor:goods",
-        "order_goods": [
-          {
-            "goods_name": "马克杯",
-            "spec": "白色 / 350ml",
-            "goods_number": 2,
-            "goods_price": 1990
-          },
-          {},
-          {
-            "goods_name": "杯盖",
-            "goods_number": 1
-          },
-          {
-            "spec": "蓝色",
-            "goods_price": 0
-          },
-          {
-            "goods_name": "赠品",
-            "goods_number": 0,
-            "goods_price": 0
-          }
-        ]
-      },
-      "detail": null
-    }
-  ]
-}
+[
+  {
+    "order": {
+      "order_sn": "261018-goods",
+      "offset": "cursor:goods",
+      "order_goods": [
+        {
+          "goods_name": "马克杯",
+          "spec": "白色 / 350ml",
+          "goods_number": 2,
+          "goods_price": 1990
+        },
+        {},
+        {
+          "goods_name": "杯盖",
+          "goods_number": 1
+        },
+        {
+          "spec": "蓝色",
+          "goods_price": 0
+        },
+        {
+          "goods_name": "赠品",
+          "goods_number": 0,
+          "goods_price": 0
+        }
+      ]
+    },
+    "detail": null
+  }
+]
