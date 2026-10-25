@@ -43,16 +43,10 @@ export async function install(
 ) {
   const installer = await context.newPage();
   await installer.goto("chrome://extensions/?id=" + extensionId);
-  // 授权后重建扩展上下文，避免首次启动缓存未授权的 userScripts API。
-  const restarted = context.waitForEvent("serviceworker", {
-    predicate: (worker) =>
-      worker.url().startsWith("chrome-extension://" + extensionId + "/"),
-  });
   await installer.evaluate(async (id) => {
     const browser = globalThis as unknown as {
       chrome: {
         developerPrivate: {
-          reload(extensionId: string): Promise<void>;
           updateExtensionConfiguration(options: {
             extensionId: string;
             userScriptsAccess: boolean;
@@ -64,9 +58,8 @@ export async function install(
       extensionId: id,
       userScriptsAccess: true,
     });
-    await browser.chrome.developerPrivate.reload(id);
   }, extensionId);
-  await restarted;
+  // 授权后等待真实注入脚本注册；Chromium 中主动 reload 会使扩展停在禁用状态。
   await installer.goto("chrome-extension://" + extensionId + "/options.html");
   const started = Date.now();
   const checks: { elapsedMs: number; scripts: string[]; error?: string }[] = [];
